@@ -129,7 +129,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
   const [selected,setSelected]=useState(null);
   const [selectedIds,setSelectedIds]=useState([]);
   const [marquee,setMarquee]=useState(null);
-  const [panels,setPanels]=useState({catalog:true,access:false,tools:false,annotations:false,counts:false});
+  const [panels,setPanels]=useState({catalog:false,access:false,tools:false,annotations:false,counts:false});
   const panelRef=useRef(null);
   const [mode,setMode]=useState('select');
   const [zoom,setZoom]=useState(1);
