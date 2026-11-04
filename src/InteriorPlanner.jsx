@@ -141,6 +141,39 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     const o={...chosen,id:uid(),x:cap(chosen.x+2,0,w),y:cap(chosen.y+2,0,h)};
     commit({objects:[...layout.objects,o]});setSelected(o.id);
   }
+  function seatingCount(o){
+    if(!o||!['round','table'].includes(o.type)||['cocktail','buffet'].includes(o.catalog))return 0;
+    if(o.type==='round')return o.w>=5.75?10:8;
+    return Math.max(4,Math.min(12,Math.round(o.w/2)*2));
+  }
+  function addChairsAround(){
+    if(!chosen)return;
+    const count=seatingCount(chosen);if(!count)return;
+    const angle=(chosen.rot||0)*Math.PI/180;
+    const rotate=(x,y)=>({x:chosen.x+x*Math.cos(angle)-y*Math.sin(angle),y:chosen.y+x*Math.sin(angle)+y*Math.cos(angle)});
+    const chairCat=CATALOG.find(c=>c.key==='folding');
+    const chairs=[];
+    const insert=(x,y,rot)=>{
+      const pos=rotate(x,y);
+      chairs.push({id:uid(),catalog:chairCat.key,type:'chair',label:chairCat.title,
+        x:Number(pos.x.toFixed(3)),y:Number(pos.y.toFixed(3)),w:chairCat.w,h:chairCat.h,rot:(rot+360)%360});
+    };
+    if(chosen.type==='round'){
+      const radius=Math.max(chosen.w,chosen.h)/2+1.1;
+      for(let i=0;i<count;i++){
+        const theta=-Math.PI/2+2*Math.PI*i/count;
+        insert(radius*Math.cos(theta),radius*Math.sin(theta),(chosen.rot||0)+theta*180/Math.PI+90);
+      }
+    }else{
+      const each=count/2;
+      for(let i=0;i<each;i++){
+        const x=-chosen.w/2+(i+1)*chosen.w/(each+1),offset=chosen.h/2+1.05;
+        insert(x,-offset,chosen.rot||0);
+        insert(x,offset,(chosen.rot||0)+180);
+      }
+    }
+    commit({objects:[...layout.objects,...chairs]});
+  }
   function toPoint(e){
     const svg=svgRef.current;if(!svg)return null;
     const rect=svg.getBoundingClientRect();
@@ -263,6 +296,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
               <XYField key={chosen.id+'h'} label="Depth (ft)" value={chosen.h} min={.25} onCommit={val=>updateObject(chosen.id,{h:val})}/>
               <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
             </div>
+            {seatingCount(chosen)>0&&<button className="ip-wide ip-seating-button" onClick={addChairsAround}>+ Add {seatingCount(chosen)} chairs around table</button>}
             <div className="ip-tool-row"><button onClick={duplicateSelected}>Duplicate</button><button className="ip-danger" onClick={removeSelected}>Delete</button></div>
           </div>:chosenDoor?<div className="ip-fields">
             <strong>Door / entrance</strong>
