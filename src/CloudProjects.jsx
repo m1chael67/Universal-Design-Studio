@@ -79,11 +79,15 @@ export default function CloudProjects({project,measurement,onLoadProject}){
       const savedId=localStorage.getItem(storageKey(currentUser.$id));
       const doc=results.find(r=>r.$id===savedId);
       if(doc){
-        // Never overwrite substantive local-only work on login.
-        if(!hasLocalWork){
+        const browserHash=JSON.stringify(latestPayload.current);
+        // After a refresh, resume cloud autosaving if the browser has the
+        // exact project version that Appwrite last saved.
+        if(browserHash===doc.payload){
+          activate(doc,latestPayload.current,false);
+        }else if(!hasLocalWork){
           activate(doc,parseRow(doc),true);
         }else{
-          setError('Browser plan kept intact. Select a cloud project to open it, or save this browser plan as a new cloud project.');
+          setError('Your browser plan differs from the cloud version. Nothing was overwritten. Open the cloud version or save this browser plan as a new cloud project.');
         }
       }else if(results.length===1&&!hasLocalWork){
         activate(results[0],parseRow(results[0]),true);
@@ -129,7 +133,10 @@ export default function CloudProjects({project,measurement,onLoadProject}){
   }
   async function saveNow(){
     if(!userRef.current||!activeIdRef.current)return false;
-    if(pending.current){await pending.current;return saveNow();}
+    if(pending.current){
+      try{await pending.current;}catch{}
+      return saveNow();
+    }
     const id=activeIdRef.current,local=latestPayload.current,hash=JSON.stringify(local);
     if(hash===savedHash.current){setSaveState('saved');return true;}
     setSaveState('pending');
@@ -190,6 +197,7 @@ export default function CloudProjects({project,measurement,onLoadProject}){
   }
   async function removeCloud(row){
     if(!window.confirm('Permanently delete “'+row.name+'” from the cloud? Export a JSON backup first if you need it.'))return;
+    if(pending.current){try{await pending.current;}catch{}}
     if(activeIdRef.current===row.$id){
       setActiveId(null);activeIdRef.current=null;remoteRef.current=null;savedHash.current='';
       localStorage.removeItem(storageKey(user.$id));setSaveState('local');
@@ -248,7 +256,7 @@ export default function CloudProjects({project,measurement,onLoadProject}){
       <strong>One-time cloud setup needed</strong>
       <p>In Appwrite's separate Universal Design Studio project, create database <code>design_studio</code>, table <code>projects</code> with row security ON.</p>
       <p>Add required columns <code>name</code> (varchar, 256), <code>ownerId</code> (varchar, 64), and <code>payload</code> (mediumtext). Give the table CREATE permission to authenticated users only; don't grant table READ, UPDATE, or DELETE.</p>
-      <a href="https://cloud.appwrite.io/console/project-6aea8c410001e8aed9b1" target="_blank" rel="noreferrer">Open Appwrite console</a>
+      <a href="https://appwrite.io/projects/6aea8c410001e8aed9b1" target="_blank" rel="noreferrer">Open Appwrite console</a>
       <p className="cloud-note">Then press Refresh cloud list. All cloud rows are private to their account.</p>
     </div>}
   </section>;
