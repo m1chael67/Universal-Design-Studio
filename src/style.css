@@ -34,3 +34,23 @@
 .measure-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
 .measure-actions button{flex:1;min-width:70px;padding:8px}
 .measure-summary .hint{margin-top:9px}
+
+/* V0.4 site brand and Photoshop-style editable tent layers */
+.brand{gap:12px}
+.crew-brand-logo{display:block;width:68px;height:62px;object-fit:contain;flex:0 0 68px;border-radius:7px;background:#f8fafb;padding:3px}
+.layer-section{border-top:1px solid #40555a}
+.layer-section h3{margin-bottom:12px}
+.tent-list-row{gap:4px}
+.tent-list-row.selected-row{background:#19403f;border-radius:9px;padding:3px;border:1px solid #57bdae}
+.tent-list-row.hidden-layer:not(.selected-row){opacity:.66}
+.tent-list-row .layer-tab{display:flex;flex:1;flex-direction:column;justify-content:center;align-items:flex-start;gap:3px;padding:9px 10px;min-height:46px;overflow:hidden}
+.layer-title{font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.layer-tab small{font-size:10px;color:#b5c8cf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.layer-tool,.tent-remove{flex:0 0 30px;width:30px;min-width:30px;height:38px;min-height:38px;padding:0 2px;font-size:17px;display:grid;place-items:center}
+.tent-remove{font-size:23px}
+.layer-editor{margin-top:14px;border:1px solid #61b8a9;background:#223c41;scroll-margin:100px}
+.layer-editor>h4{display:flex;align-items:center;gap:8px;line-height:1.4}
+.active-indicator{width:9px;height:9px;border-radius:50%;background:#ffd078;box-shadow:0 0 0 3px #4e4b32;flex:0 0 9px}
+.editing-note{background:#51472e;border:1px solid #9f8d49;padding:9px 10px;border-radius:6px;font-size:12px;color:#ffeed7;line-height:1.5}
+.layer-editor .grid>button{min-height:42px}
+@media(max-width:370px){.brand strong{font-size:14px}.brand .crew-brand-logo{width:55px;height:50px;flex-basis:55px}.layer-tool,.tent-remove{width:28px;min-width:28px;flex-basis:28px}}
