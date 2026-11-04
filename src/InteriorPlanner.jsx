@@ -11,7 +11,7 @@ const CATALOG = [
   {key:'cocktail',title:'Cocktail table',type:'round',w:2.5,h:2.5,color:'#68c5ba'},
   {key:'folding',title:'Folding chair',type:'chair',w:1.45,h:1.45,color:'#9aaddc'},
   {key:'chiavari',title:'Chiavari chair',type:'chair',w:1.45,h:1.45,color:'#9aaddc'},
-  {key:'stage',title:'Bil-Jax stage (4 ft sections)',type:'stage',w:4,h:4,color:'#202327'},
+  {key:'stage',title:'Bil-Jax stage (4 ft sections)',type:'stage',w:4,h:4,color:'#e7b66c'},
   {key:'dance',title:'Dance floor (3 ft panels)',type:'dance',w:12,h:12,color:'#d7a6cb'},
   {key:'bar6',title:'Bar 6 ft',type:'bar',w:6,h:2.5,color:'#a4c782'},
   {key:'bar7',title:'Bar 7 ft',type:'bar',w:7,h:2.5,color:'#a4c782'},
@@ -90,14 +90,13 @@ function ItemShape({item,selected,press,outside,showHandle=true,stageLink=null})
     {rounded?<ellipse rx={w/2} ry={h/2} fill={clr} fillOpacity=".83" stroke={outline} strokeWidth={selected?0.2:0.08}/>:
       <rect x={-w/2} y={-h/2} width={w} height={h} rx={type==='chair'?0.24:0.12} fill={clr} fillOpacity=".85" stroke={outline} strokeWidth={selected?0.2:0.08}/>}
     {type==='chair'&&<path d={`M ${-w*.3} ${-h*.22} L ${w*.3} ${-h*.22}`} stroke="#263a54" strokeWidth=".18" strokeLinecap="round"/>}
-    {type==='stage'&&<g pointerEvents="none" stroke="#8b9399" strokeWidth=".075" opacity=".85">{Array.from({length:Math.max(0,Math.floor(w/4)-1)},(_,i)=><line key={'x'+i} x1={-w/2+4*(i+1)} x2={-w/2+4*(i+1)} y1={-h/2} y2={h/2}/>)}{Array.from({length:Math.max(0,Math.floor(h/4)-1)},(_,i)=><line key={'y'+i} x1={-w/2} x2={w/2} y1={-h/2+4*(i+1)} y2={-h/2+4*(i+1)}/>)}</g>}
+    {type==='stage'&&<><path d={`M ${-w/2} ${-h/2} L ${w/2} ${h/2} M ${w/2} ${-h/2} L ${-w/2} ${h/2}`} stroke="#866039" strokeWidth=".08" strokeOpacity=".6"/></>}
     {type==='stairs'&&<g pointerEvents="none"><line x1={-w/2+.15} x2={w/2-.15} y1={-h/2+.13} y2={-h/2+.13} stroke="#fff3a2" strokeWidth=".22"/><text x="0" y={-h/2+.52} fontSize=".42" fontWeight="800" textAnchor="middle" fill="#fff3a2">TOP / STAGE</text>{[1,2].map(i=><line key={i} x1={-w/2+.12} x2={w/2-.12} y1={-h/2+h*i/3} y2={-h/2+h*i/3} stroke="#675a4c" strokeWidth=".09"/>)}</g>}
     {type==='stairs'&&stageLink&&<g pointerEvents="none"><circle cx={w/2-.27} cy={h/2-.28} r=".3" fill="#4ade80" stroke="#123b2a" strokeWidth=".07"/><text x={w/2-.27} y={h/2-.28} fontSize=".36" fontWeight="800" fill="#083519" textAnchor="middle" dominantBaseline="middle">✓</text></g>}
     {type==='dance'&&<><path d={`M ${-w/2} 0 H ${w/2} M 0 ${-h/2} V ${h/2}`} stroke="#806180" strokeWidth=".1" strokeDasharray=".7,.4"/></>}
     {caption&&<g pointerEvents="none">
-      <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill={type==='stage'?'#f0f3f8':'#183038'}>{caption}</text>
+      <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038">{caption}</text>
       {['stage','dance','stairs','bar'].includes(type)&&<text textAnchor="middle" y={Math.min(h*.21,1)} dominantBaseline="central" fontWeight="700" fontSize={Math.min(.9,fontSize*.78)} fill={type==='stage'?'#f0f3f8':'#183038'}>{number(w)} × {number(h)} ft</text>}
-      {type==='stage'&&<text textAnchor="middle" y={Math.min(h*.39,1.55)} fontSize={Math.min(.7,fontSize*.75)} fontWeight="700" fill="#9ae7cb">{Number(item.heightInches)||16}″ high</text>}
     </g>}
     {selected&&showHandle&&<>
       <line x1="0" y1={-h/2} x2="0" y2={-h/2-1.6} stroke="#ffdd92" strokeWidth=".16"/>
@@ -502,8 +501,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
   }
   return <div className="ip-shell" role="dialog" aria-modal="true" aria-label="Tent interior floor planner">
     <header className="ip-header">
-      <button className="ip-back" onClick={onClose}>← Back to site</button>
-      <button className="ip-view-site" onClick={onShowSite}>View layout on satellite map</button>
+      <button className="ip-back" onClick={onShowSite}>← Back to satellite map</button>
       <div className="ip-heading"><strong>{tent.name?.trim()||'Tent interior'}</strong><span>Width {h} ft (side) × Length {w} ft (top) · {fmt(w*h)} sq ft</span></div>
       <div className="ip-history">
         <button onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl/⌘+Z)">↶ Undo</button>
