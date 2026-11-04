@@ -9,6 +9,7 @@ import {useProjectHistory} from './useProjectHistory.js';
 import {interiorGeoJSON} from './mapInterior.js';
 import {siteLogisticsGeoJSON,logisticsType,siteFeet} from './siteLogistics.js';
 import SiteLogisticsPanel from './SiteLogisticsPanel.jsx';
+import PhotoMarkup from './PhotoMarkup.jsx';
 
 const FEET = 3.280839895;
 // Configure VITE_MAPBOX_PUBLIC_TOKEN once in Appwrite Sites environment variables.
@@ -138,6 +139,7 @@ function App(){
   const [width,setWidth]=useState('20'),[length,setLength]=useState('40'),[rotation,setRotation]=useState('0'),[clearance,setClearance]=useState('4');
   const mapDiv=useRef(null),mapRef=useRef(null),ready=useRef(false),drag=useRef(null),live=useRef({});
   const addSectionRef=useRef(null),editorRef=useRef(null),logisticsPanelRef=useRef(null);
+  const layerDetailsRef=useRef(null),addDetailsRef=useRef(null);
   const tents=Array.isArray(project.tents)?project.tents:[];
   const logistics=Array.isArray(project.logistics)?project.logistics:[];
   const chosen=tents.find(t=>t.id===selected);
@@ -423,10 +425,12 @@ function App(){
   }
   function editTent(patch){setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===selected?{...t,...patch}:t)}));}
   function saveInterior(next){setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===interiorId?{...t,interior:next}:t)}),{group:'interior'});}
+  function saveSitePhoto(next){setProject(p=>({...p,sitePhoto:next}),{group:'photo-markup'});}
   function loadCloudProject(payload){
     if(!Array.isArray(payload?.tents))return;
     const next={name:String(payload.name||'Cloud site plan'),center:Array.isArray(payload.center)?payload.center:[-90.1994,38.627],
       zoom:payload.zoom||17,tents:payload.tents,logistics:Array.isArray(payload.logistics)?payload.logistics:[],
+      sitePhoto:payload.sitePhoto&&typeof payload.sitePhoto==='object'?payload.sitePhoto:null,
       siteChecklist:payload.siteChecklist&&typeof payload.siteChecklist==='object'?payload.siteChecklist:{},
       measurement:payload.measurement||{points:[],closed:false}};
     loadProject(next);
@@ -456,6 +460,7 @@ function App(){
     setters[field](String(n));
   }
   function beginAddTent(){
+    if(addDetailsRef.current)addDetailsRef.current.open=true;
     setLogisticsDraft(null);setLogisticsHover(null);
     setTool('place');setPendingTent(null);setMeasureCursor(null);
     // Keep the Add Tent panel reachable even when the selected-tent editor is expanded.
@@ -588,6 +593,7 @@ function App(){
       const valid=p.tents.filter(t=>Number.isFinite(t.lng)&&Number.isFinite(t.lat)&&t.width>0&&t.length>0).slice(0,150);
       setProject({name:String(p.name||'Imported plan'),center:p.center||[-90.1994,38.627],zoom:p.zoom||17,tents:valid,
         logistics:Array.isArray(p.logistics)?p.logistics.slice(0,200):[],
+        sitePhoto:p.sitePhoto&&typeof p.sitePhoto==='object'?p.sitePhoto:null,
         siteChecklist:p.siteChecklist&&typeof p.siteChecklist==='object'?p.siteChecklist:{},
         measurement:{points:Array.isArray(p.measurement?.points)?p.measurement.points.filter(a=>Array.isArray(a)&&a.length===2&&a.every(Number.isFinite)).slice(0,100):[],closed:Boolean(p.measurement?.closed)}});
       setSelected(null);setPendingTent(null);setTool('select');
@@ -598,7 +604,7 @@ function App(){
   }
   return <div className="layout">
     <aside className="sidebar">
-      <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V1.0</small></div></div>
+      <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V1.1</small></div></div>
       <div className="quick-actions">
         <div className="quick-navigation">
           <button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button>
@@ -613,7 +619,7 @@ function App(){
         </div>
       </div>
       <CloudProjects project={project} measurement={{points,closed:measureClosed}} onLoadProject={loadCloudProject}/>
-      <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><p className="hint">To open the map automatically on every computer, set <code>VITE_MAPBOX_PUBLIC_TOKEN</code> once in Appwrite Sites → Settings → Environment variables, then redeploy. This manual entry is a temporary fallback.</p><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
+      <details className="sidebar-collapsible"><summary>Map imagery & address lookup</summary><div className="sidebar-collapsible-body"><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><p className="hint">To open the map automatically on every computer, set <code>VITE_MAPBOX_PUBLIC_TOKEN</code> once in Appwrite Sites → Settings → Environment variables, then redeploy. This manual entry is a temporary fallback.</p><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</div></details>
       <div ref={logisticsPanelRef} className="site-logistics-anchor">
       <SiteLogisticsPanel jumpToken={logisticsJump} items={logistics} draft={logisticsDraft} selected={logisticsSelected}
         checklist={project.siteChecklist||{}} onChecklistChange={(key,value)=>{
@@ -625,7 +631,8 @@ function App(){
         onChange={updateLogistics} onRemove={removeLogistics} onZoom={zoomToLogistics}
         onFitAll={fitEntireSite}/>
       </div>
-      <section><h3>Tools</h3>
+      <PhotoMarkup value={project.sitePhoto||null} onChange={saveSitePhoto} projectName={project.name}/>
+      <details className="sidebar-collapsible"><summary>Tools & measurements</summary><div className="sidebar-collapsible-body">
         <div className="grid">
           <button className={tool==='select'?'active':''} disabled={!token} onClick={()=>{setTool('select');setPendingTent(null);setMeasureCursor(null);setLogisticsDraft(null);setLogisticsHover(null);}}>Select / drag</button>
           <button className={tool==='measure'?'active':''} disabled={!token} onClick={()=>{setTool('measure');setPendingTent(null);setLogisticsDraft(null);setLogisticsHover(null);setPoints([]);setMeasureCursor(null);setMeasureClosed(false);setNearStart(false);}}>New measurement</button>
@@ -641,8 +648,9 @@ function App(){
           </div>
           <p className="hint">Side labels show feet to two decimals. Repeated side lengths within 0.03 ft are labeled only once.</p>
         </div>}
-      </section>
-      <section className="layer-section">
+      </div></details>
+      <details className="sidebar-collapsible layer-section" ref={layerDetailsRef}>
+        <summary>Layers — Tents ({tents.length})</summary><div className="sidebar-collapsible-body">
         <h3>Layers — Tents ({tents.length})</h3>
         {tents.length===0&&<p className="hint">No tents yet. Use + Add tent, then click the map once.</p>}
         {tents.map((t,i)=><div key={t.id} className={'tent-list-row '+(selected===t.id?'selected-row':'')+(t.hidden?' hidden-layer':'')}>
@@ -698,9 +706,9 @@ function App(){
             <button onClick={()=>duplicateTent(chosen)}>Duplicate tent</button>
           </div>
         </div>}
-      </section>
-      <section ref={addSectionRef} className="add-tent-section"><h3>New tent settings</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Place a new tent</button>{tool==='place'&&<div className="placement-controls"><strong>Placement mode is active</strong><p>Click once on the map to add your tent. You'll immediately be able to edit its layer.</p><button onClick={cancelTent}>Cancel placement</button></div>}</section>
-      <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Save editable project (.json)</button><label className="filebutton">Open editable project (.json)<input type="file" accept=".json" onChange={importFile}/></label><div className="grid image-exports"><button disabled={!token} onClick={()=>exportImage('png')}>Export PNG</button><button disabled={!token} onClick={()=>exportImage('jpg')}>Export JPG</button></div><p className="hint">JSON is an offline editable backup. PNG/JPG are pictures. When signed in and linked to a cloud project, changes autosave to Appwrite; otherwise this browser keeps a local copy.</p></section>
+      </div></details>
+      <details ref={addDetailsRef} className="sidebar-collapsible add-tent-section"><summary>New tent settings</summary><div className="sidebar-collapsible-body"><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Place a new tent</button>{tool==='place'&&<div className="placement-controls"><strong>Placement mode is active</strong><p>Click once on the map to add your tent. You'll immediately be able to edit its layer.</p><button onClick={cancelTent}>Cancel placement</button></div>}</div></details>
+      <details className="sidebar-collapsible"><summary>Project export & backup</summary><div className="sidebar-collapsible-body"><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Save editable project (.json)</button><label className="filebutton">Open editable project (.json)<input type="file" accept=".json" onChange={importFile}/></label><div className="grid image-exports"><button disabled={!token} onClick={()=>exportImage('png')}>Export PNG</button><button disabled={!token} onClick={()=>exportImage('jpg')}>Export JPG</button></div><p className="hint">JSON is an offline editable backup. PNG/JPG are pictures. When signed in and linked to a cloud project, changes autosave to Appwrite; otherwise this browser keeps a local copy.</p></div></details>
     </aside>
     <main className="map-panel"><div className="map-top">
       <label className="map-project-label" title="Edit the project name">
