@@ -7,6 +7,8 @@ import InteriorPlanner from './InteriorPlanner.jsx';
 import CloudProjects from './CloudProjects.jsx';
 import {useProjectHistory} from './useProjectHistory.js';
 import {interiorGeoJSON} from './mapInterior.js';
+import {siteLogisticsGeoJSON,logisticsType,siteFeet} from './siteLogistics.js';
+import SiteLogisticsPanel from './SiteLogisticsPanel.jsx';
 
 const FEET = 3.280839895;
 // Configure VITE_MAPBOX_PUBLIC_TOKEN once in Appwrite Sites environment variables.
@@ -110,6 +112,9 @@ function App(){
   const [address,setAddress]=useState('');
   const [matches,setMatches]=useState([]);
   const [tool,setTool]=useState('select');
+  const [logisticsDraft,setLogisticsDraft]=useState(null);
+  const [logisticsHover,setLogisticsHover]=useState(null);
+  const [logisticsSelected,setLogisticsSelected]=useState(null);
   const points=Array.isArray(project.measurement?.points)?project.measurement.points:[];
   const measureClosed=Boolean(project.measurement?.closed);
   const setPoints=update=>setProject(prev=>{
@@ -133,9 +138,11 @@ function App(){
   const mapDiv=useRef(null),mapRef=useRef(null),ready=useRef(false),drag=useRef(null),live=useRef({});
   const addSectionRef=useRef(null),editorRef=useRef(null);
   const tents=Array.isArray(project.tents)?project.tents:[];
+  const logistics=Array.isArray(project.logistics)?project.logistics:[];
   const chosen=tents.find(t=>t.id===selected);
   const interiorTent=tents.find(t=>t.id===interiorId);
-  live.current={tool,tents,points,measureCursor,measureClosed,nearStart,selected,width,length,rotation,clearance,pendingTent};
+  live.current={tool,tents,points,measureCursor,measureClosed,nearStart,selected,width,length,rotation,clearance,pendingTent,
+    logistics,logisticsDraft,logisticsHover,logisticsSelected};
   // Do not overwrite a field while the user is editing it or while the dial moves.
   useEffect(()=>{
     if(chosen){
@@ -215,6 +222,8 @@ function App(){
       m.addSource('tent-dimensions',{type:'geojson',data:fc([])});
       m.addSource('preview-tent',{type:'geojson',data:fc([])});
       m.addSource('preview-clearance',{type:'geojson',data:fc([])});
+      for(const key of ['area','border','route','pins','labels','draft','draftPoints'])
+        m.addSource('logistics-'+key,{type:'geojson',data:fc([])});
       m.addLayer({id:'clearance-fill',source:'clearance',type:'fill',paint:{'fill-color':'#ffc46b','fill-opacity':.15}});
       m.addLayer({id:'clearance-line',source:'clearance',type:'line',paint:{'line-color':'#ffc46b','line-width':1.25,'line-dasharray':[3,2]}});
       m.addLayer({id:'tent-fill',source:'tents',type:'fill',paint:{'fill-color':'#46dccb','fill-opacity':.38}});
@@ -252,6 +261,25 @@ function App(){
       m.addLayer({id:'preview-clearance-line',source:'preview-clearance',type:'line',paint:{'line-color':'#ffcf79','line-width':1.25,'line-dasharray':[2,2]}});
       m.addLayer({id:'preview-tent-fill',source:'preview-tent',type:'fill',paint:{'fill-color':'#ffc46b','fill-opacity':.28}});
       m.addLayer({id:'preview-tent-outline',source:'preview-tent',type:'line',paint:{'line-color':'#ffe6a0','line-width':1.75,'line-dasharray':[3,1]}});
+      m.addLayer({id:'logistics-area-fill',source:'logistics-area',type:'fill',
+        paint:{'fill-color':['get','color'],'fill-opacity':['case',['==',['get','selected'],1],.43,.23]}});
+      m.addLayer({id:'logistics-area-outline',source:'logistics-border',type:'line',
+        paint:{'line-color':['get','color'],'line-width':['case',['==',['get','selected'],1],4,2]}});
+      m.addLayer({id:'logistics-route-lines',source:'logistics-route',type:'line',
+        layout:{'line-cap':'round','line-join':'round'},
+        paint:{'line-color':['get','color'],'line-width':['case',['==',['get','selected'],1],6,3.5],
+          'line-dasharray':[3,1]}});
+      m.addLayer({id:'logistics-markers',source:'logistics-pins',type:'circle',
+        paint:{'circle-radius':['case',['==',['get','endpoint'],1],5,8],
+          'circle-color':['get','color'],'circle-stroke-color':'#12282f','circle-stroke-width':2}});
+      m.addLayer({id:'logistics-labels',source:'logistics-labels',type:'symbol',
+        layout:{'text-field':['get','label'],'text-size':12,'text-font':['Open Sans Semibold','Arial Unicode MS Regular'],
+          'text-optional':true,'text-offset':[0,-1.1],'text-max-width':10},
+        paint:{'text-color':'#fff9ed','text-halo-color':'#12282f','text-halo-width':2.1}});
+      m.addLayer({id:'logistics-draft-line',source:'logistics-draft',type:'line',
+        paint:{'line-color':['get','color'],'line-width':3,'line-dasharray':[2,2]}});
+      m.addLayer({id:'logistics-draft-pins',source:'logistics-draftPoints',type:'circle',
+        paint:{'circle-radius':5,'circle-color':['get','color'],'circle-stroke-color':'#102028','circle-stroke-width':1.5}});
       sync();setStatus(mapStyle==='satellite'?'Satellite imagery ready':mapStyle==='hybrid'?'Satellite + streets ready':'Street map ready');
     });
     function sync(){
@@ -276,10 +304,37 @@ function App(){
       m.getSource('measure-labels')?.setData(measurementLabels(current.points,hover,current.measureClosed));
       m.getSource('preview-tent')?.setData(polygonLayer(current.pendingTent?[current.pendingTent]:[]));
       m.getSource('preview-clearance')?.setData(polygonLayer(current.pendingTent?[current.pendingTent]:[],true));
+      const siteLines=siteLogisticsGeoJSON(current.logistics,current.logisticsDraft,current.logisticsHover,current.logisticsSelected);
+      for(const [key,data] of Object.entries(siteLines))
+        m.getSource('logistics-'+key)?.setData(data);
     }
     m.on('click',e=>{
       if(drag.current)return;
       const st=live.current;
+      if(st.tool==='logistics'&&st.logisticsDraft){
+        const current=st.logisticsDraft;
+        const point=e.lngLat.toArray();
+        const kind=logisticsType(current.type).kind;
+        if(kind==='pin'||(current.shape==='circle'&&current.points.length===1)){
+          const finished={...current,points:[...current.points,point]};
+          setProject(p=>({...p,logistics:[...(p.logistics||[]).filter(x=>x.id!==finished.id),finished]}));
+          setLogisticsSelected(finished.id);setLogisticsDraft(null);setLogisticsHover(null);setTool('select');
+          setStatus('Site mark saved. Select it below to edit notes or redraw.');
+          return;
+        }
+        if(kind==='area'&&current.shape==='polygon'&&current.points.length>=3){
+          const first=m.project(current.points[0]);
+          if(Math.hypot(first.x-e.point.x,first.y-e.point.y)<17){
+            const finished={...current};
+            setProject(p=>({...p,logistics:[...(p.logistics||[]).filter(x=>x.id!==finished.id),finished]}));
+            setLogisticsSelected(finished.id);setLogisticsDraft(null);setLogisticsHover(null);setTool('select');
+            setStatus('Site zone saved.');
+            return;
+          }
+        }
+        setLogisticsDraft(d=>d?{...d,points:[...d.points,point]}:d);
+        return;
+      }
       if(st.tool==='measure'){
         const point=e.lngLat.toArray();
         if(st.measureClosed){
@@ -298,8 +353,17 @@ function App(){
         setStatus('Tent placed. Select its layer to edit the size, angle, and clearance.');
         return;
       }
+      const mark=m.queryRenderedFeatures(e.point,{layers:[
+        'logistics-markers','logistics-route-lines','logistics-area-fill'
+      ]})[0];
+      if(mark?.properties?.id){
+        setLogisticsSelected(mark.properties.id);
+        setSelected(null);
+        return;
+      }
       const hit=m.queryRenderedFeatures(e.point,{layers:['tent-fill']})[0];
       setSelected(hit?.properties?.id||null);
+      setLogisticsSelected(null);
     });
     m.on('mouseenter','tent-fill',e=>{
       if(live.current.tool!=='select')return;
@@ -323,6 +387,9 @@ function App(){
         return;
       }
       const st=live.current;
+      if(st.tool==='logistics'&&st.logisticsDraft){
+        setLogisticsHover(e.lngLat.toArray());
+      }
       if(st.tool==='measure'&&st.points.length&&!st.measureClosed){
         const close=snapToStart(m,e.point,st.points);
         setNearStart(close);
@@ -340,7 +407,8 @@ function App(){
     const m=mapRef.current;
     m?.__udsSync?.();
     if(m) m.getCanvas().style.cursor=tool==='select'?'default':'crosshair';
-  },[project.tents,points,measureCursor,measureClosed,nearStart,selected,tool,pendingTent]);
+  },[project.tents,project.logistics,points,measureCursor,measureClosed,nearStart,selected,tool,pendingTent,
+    logisticsDraft,logisticsHover,logisticsSelected]);
   function startMap(){if(!tokenText.trim().startsWith('pk.')){setStatus('Enter your public Mapbox token (starts with pk.).');return;}localStorage.setItem('uds-mapbox-token',tokenText.trim());setToken(tokenText.trim());}
   async function search(e){
     e.preventDefault();if(!token||!address.trim())return;
