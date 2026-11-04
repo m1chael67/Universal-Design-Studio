@@ -2,7 +2,7 @@ import React,{useState} from 'react';
 import {Client,Functions,ExecutionMethod} from 'appwrite';
 import './admin.css';
 
-const FUNCTION_ID=import.meta.env.VITE_DESIGN_ADMIN_FUNCTION_ID||'';
+const FUNCTION_ID=import.meta.env.VITE_DESIGN_ADMIN_FUNCTION_ID||'6aeb52cf002f8a6dd6a9';
 const client=new Client().setEndpoint('https://nyc.cloud.appwrite.io/v1').setProject('6aea8c410001e8aed9b1');
 const functions=new Functions(client);
 
@@ -21,9 +21,17 @@ export default function AdminPanel({user}){
       const execution=await functions.createExecution({
         functionId:FUNCTION_ID,body:'{}',async:false,method:ExecutionMethod.GET
       });
-      const data=JSON.parse(execution.responseBody||'{}');
-      if(execution.responseStatusCode!==200||data.error)throw Error(data.error||'Admin request failed with status '+execution.responseStatusCode);
-      if(!Array.isArray(data.accounts)||!Array.isArray(data.projects))throw Error('Unexpected server response');
+      let data;
+      try{data=JSON.parse(execution.responseBody||'{}');}
+      catch{throw Error('Admin Function returned non-JSON output. Open its execution logs and verify the deployment entrypoint is src/main.js.');}
+      if(execution.responseStatusCode!==200||data.error){
+        throw Error(data.error||'Admin Function failed with HTTP '+execution.responseStatusCode+'. Check its Appwrite execution logs.');
+      }
+      if(!Array.isArray(data.accounts)||!Array.isArray(data.projects)){
+        const starter=data?.motto||data?.getInspired||data?.learn;
+        if(starter)throw Error('The Admin Function is still running Appwrite starter code. Redeploy the Function from the GitHub repository with root functions/design-admin and entrypoint src/main.js.');
+        throw Error('The Admin Function returned different data than expected. Redeploy the Function and check its execution logs. Fields returned: '+Object.keys(data||{}).join(', '));
+      }
       setResponse(data);
     }catch(e){setError(String(e?.message||e));}
     finally{setLoading(false);}
