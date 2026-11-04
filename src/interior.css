@@ -111,3 +111,5 @@
 .ip-history button{min-width:66px}
 .ip-history button:disabled{opacity:.35;cursor:not-allowed}
 @media(max-width:650px){.ip-history{order:4}.ip-history button{font-size:12px;padding:8px}}
+
+.ip-view-site{background:#205b58!important;border-color:#4eb8a8!important;font-weight:700!important}
