@@ -399,6 +399,8 @@ export default function InteriorPlanner({tent,onChange,onClose}){
               <p>{idea.description}</p>
               <p><strong>{idea.tableCount}</strong> new {idea.tableName} tables • <strong>{idea.newChairs}</strong> new chairs</p>
               <p>Target between-group gap: <strong>{fmt(idea.aisleEstimate)} ft</strong> (not a verified aisle width)</p>
+              <p>Estimated efficiency: <strong>{(100*idea.totalSeats/Math.max(1,w*h)).toFixed(1)}</strong> seats / 100 sq ft • clusters occupy about <strong>{idea.estimatedUsage}%</strong> of tent area</p>
+              {idea.tableAngle===90&&<p>Tables rotated 90° for a more efficient fit.</p>}
               <div className="ip-tool-row">
                 <button onClick={()=>{setOptimizerPreview(idea);setMode('select');setSelected(null);}}>Preview</button>
                 <button className="ip-apply" disabled={!idea.newObjects.length} onClick={()=>applySeatingIdea(idea)}>Apply</button>
