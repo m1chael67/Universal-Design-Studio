@@ -175,6 +175,13 @@ function addWestCoastStructure(root,{length,width,eave,roofMode,frameVisible}){
       frameRafter(root,[crownX,p.ridge,0],[x,eave,z],p.doubleTube);
     }
   }
+  if(p.familyWidth===20&&p.ridgeXs.length>=3){
+    // Celina 20-wide long frames have a 20-ft cable assembly at each
+    // transverse ridge station; show these as fine tension members.
+    for(const x of p.ridgeXs){
+      post(root,[x,eave+.24,-d],[x,eave+.24,d],.014,0x829498);
+    }
+  }
   if(p.doubleTube){
     // Under-ridge braces / 4-point cable layout. Simplified visual members
     // based on Celina's 30- and 40-wide diagrams; do not calculate loads.
