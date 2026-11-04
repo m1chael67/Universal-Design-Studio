@@ -50,7 +50,7 @@ export function objectPosition(o,length,width){
 
 export function sitePlacements(tents){
   const valid=(Array.isArray(tents)?tents:[]).filter(t=>
-    Number.isFinite(Number(t.lng))&&Number.isFinite(Number(t.lat))&&
+    t.lng!=null&&t.lat!=null&&Number.isFinite(Number(t.lng))&&Number.isFinite(Number(t.lat))&&
     Math.abs(Number(t.lat))<=85&&Math.abs(Number(t.lng))<=180
   ).slice(0,75);
   if(!valid.length)return [];
