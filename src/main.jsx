@@ -5,6 +5,11 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import './style.css';
 
 const FEET = 3.280839895;
+const MAP_STYLES = {
+  satellite: 'mapbox://styles/mapbox/satellite-v9',
+  hybrid: 'mapbox://styles/mapbox/satellite-streets-v12',
+  streets: 'mapbox://styles/mapbox/streets-v12'
+};
 const radians = deg => deg * Math.PI / 180;
 const clamp = (v,min,max,fallback) => Number.isFinite(+v) ? Math.max(min,Math.min(max,+v)) : fallback;
 const distance = (a,b) => {
@@ -27,6 +32,7 @@ function App(){
   const [project,setProject]=useState(()=>fromStore('uds-project',{name:'New site plan',center:[-90.1994,38.627],zoom:17,tents:[]}));
   const [tokenText,setTokenText]=useState(()=>localStorage.getItem('uds-mapbox-token')||'');
   const [token,setToken]=useState('');
+  const [mapStyle,setMapStyle]=useState('satellite');
   const [status,setStatus]=useState('Enter a Mapbox public token to begin.');
   const [address,setAddress]=useState('');
   const [matches,setMatches]=useState([]);
@@ -42,10 +48,12 @@ function App(){
     if(!token||!mapDiv.current)return;
     mapboxgl.accessToken=token;
     let m;
-    try{m=new mapboxgl.Map({container:mapDiv.current,style:'mapbox://styles/mapbox/satellite-streets-v12',center:project.center||[-90.1994,38.627],zoom:project.zoom||17});
+    try{m=new mapboxgl.Map({container:mapDiv.current,style:MAP_STYLES[mapStyle],center:project.center||[-90.1994,38.627],zoom:project.zoom||17});
     }catch(err){setStatus('Map failed: '+err.message);return;}
     mapRef.current=m;ready.current=false;setStatus('Loading satellite imagery…');
     m.addControl(new mapboxgl.NavigationControl(),'top-right');
+    // On the Satellite setting, use Mapbox's dedicated imagery-only style.
+    // Unlike street styles it has a raster imagery layer as its entire basemap.
     m.on('error',ev=>{if(ev.error?.message){setStatus('Map error: '+ev.error.message);}});
     m.on('load',()=>{
       ready.current=true;
@@ -57,7 +65,7 @@ function App(){
       m.addLayer({id:'tent-fill',source:'tents',type:'fill',paint:{'fill-color':'#46dccb','fill-opacity':.38}});
       m.addLayer({id:'tent-outline',source:'tents',type:'line',paint:{'line-color':'#d8fff9','line-width':3}});
       m.addLayer({id:'measure-line',source:'measure',type:'line',paint:{'line-color':'#ffffff','line-width':3,'line-dasharray':[2,1]}});
-      sync();setStatus('Satellite map ready');
+      sync();setStatus(mapStyle==='satellite'?'Satellite imagery ready':mapStyle==='hybrid'?'Satellite + streets ready':'Street map ready');
     });
     function sync(){
       if(!ready.current)return;
@@ -96,7 +104,7 @@ function App(){
     // Refresh sources when React state changes (see next effect).
     m.__udsSync=sync;
     return ()=>{ready.current=false;mapRef.current=null;m.remove();};
-  },[token]);
+  },[token,mapStyle]);
   useEffect(()=>{mapRef.current?.__udsSync?.();},[project.tents,points,selected,tool]);
   function startMap(){if(!tokenText.trim().startsWith('pk.')){setStatus('Enter your public Mapbox token (starts with pk.).');return;}localStorage.setItem('uds-mapbox-token',tokenText.trim());setToken(tokenText.trim());}
   async function search(e){
@@ -126,7 +134,7 @@ function App(){
   return <div className="layout">
     <aside className="sidebar">
       <div className="brand"><span className="mark">U</span><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.1</small></div></div>
-      <section><h3>Satellite map</h3>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p></section>
+      <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p></section>
       <section><h3>Tools</h3><div className="grid">{[['select','Select / drag'],['place','Place tent'],['measure','Measure']].map(([id,label])=><button key={id} className={tool===id?'active':''} disabled={!token} onClick={()=>{setTool(id);if(id==='measure')setPoints([]);}}>{label}</button>)}</div><p className="hint">{tool==='measure'?'Click two points on the map to measure a distance.':tool==='place'?'Click on the satellite map to position a tent.':'Click to select a tent; drag it to reposition.'}</p>{points.length===2&&<div className="measurement">Distance: {distance(points[0],points[1]).toFixed(1)} ft</div>}</section>
       <section><h3>New tent</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(+e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(+e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(+e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(+e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={()=>setTool('place')}>Place {width} × {length} tent</button></section>
       <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><button key={t.id} className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+'×'+t.length+' ft'}</button>)}{chosen&&<div className="chosen"><h4>Selected tent</h4><label>Rotation (degrees)<input type="number" value={chosen.rotation} onChange={e=>editTent({rotation:clamp(e.target.value,0,359,0)})}/></label><label>Clearance (feet per side)<input type="number" value={chosen.clearance} onChange={e=>editTent({clearance:clamp(e.target.value,0,200,0)})}/></label><button onClick={()=>editTent({rotation:(chosen.rotation+15)%360})}>Rotate +15°</button><button onClick={()=>{setProject(p=>({...p,tents:p.tents.filter(t=>t.id!==selected)}));setSelected(null);}}>Delete tent</button></div>}</section>
