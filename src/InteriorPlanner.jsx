@@ -211,12 +211,10 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     try{
       const img=new Image();
       await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=url;});
-      const width=Math.max(600,Math.min(3000,(w+pad*2)*30));
-      const height=Math.max(600,Math.min(3000,(h+pad*2)*30));
-      const factor=Math.min(1,width/img.width,height/img.height);
-      const output=document.createElement('canvas');output.width=Math.round(img.width*Math.min(4,Math.max(1,factor*3)));
-      output.height=Math.round(img.height*Math.min(4,Math.max(1,factor*3)));
-      output.width=Math.min(3000,output.width);output.height=Math.min(3000,output.height);
+      const scale=Math.min(50,2400/(w+pad*2),2400/(h+pad*2));
+      const output=document.createElement('canvas');
+      output.width=Math.max(1,Math.round((w+pad*2)*scale));
+      output.height=Math.max(1,Math.round((h+pad*2)*scale));
       const ctx=output.getContext('2d');
       ctx.fillStyle='#1b2d38';ctx.fillRect(0,0,output.width,output.height);
       ctx.drawImage(img,0,0,output.width,output.height);
