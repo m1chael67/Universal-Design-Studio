@@ -1,9 +1,19 @@
 {
-  "name": "uds-admin-function",
+  "name": "starter-template",
   "version": "1.0.0",
-  "private": true,
+  "description": "",
+  "main": "src/main.js",
   "type": "module",
+  "scripts": {
+    "format": "prettier --write ."
+  },
   "dependencies": {
-    "node-appwrite": "^20.0.0"
+    "node-appwrite": "^29.0.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5"
+  },
+  "engines": {
+    "node": ">=18.17.0"
   }
 }
