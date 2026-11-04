@@ -536,6 +536,21 @@ function App(){
             <label>Clearance (ft per side)<input type="number" min="0" max="200" step="0.01" value={clearanceDraft} onChange={e=>changeSelectedDimension('clearance',e.target.value)} onBlur={()=>finishSelectedDimension('clearance',clearanceDraft)}/></label>
           </div>
           <p className="hint">Changes update this highlighted tent directly. The dashed perimeter represents the additional clearance.</p>
+          <div className="site-layout-controls">
+            <label className="site-layout-switch">
+              <input type="checkbox" checked={Boolean(chosen.showInteriorOnMap)}
+                onChange={e=>editTent({showInteriorOnMap:e.target.checked})}/>
+              Show interior on satellite map
+            </label>
+            <p className="hint">The gold LENGTH START / LENGTH END markers identify the two ends. Adjust these to match the direction your crew will actually build.</p>
+            <div className="grid">
+              <button onClick={()=>{const angle=(Number(chosen.rotation)+90)%360;editTent({rotation:angle});setRotationDraft(String(angle));}}>Rotate entire tent +90°</button>
+              <button onClick={()=>{const angle=(Number(chosen.rotation)+180)%360;editTent({rotation:angle});setRotationDraft(String(angle));}}>Rotate entire tent 180°</button>
+              <button className={chosen.siteFlipLength?'active':''} onClick={()=>editTent({siteFlipLength:!chosen.siteFlipLength})}>↔ Reverse length {chosen.siteFlipLength?'✓':''}</button>
+              <button className={chosen.siteFlipWidth?'active':''} onClick={()=>editTent({siteFlipWidth:!chosen.siteFlipWidth})}>↕ Reverse width {chosen.siteFlipWidth?'✓':''}</button>
+            </div>
+            <p className="hint">Rotate changes the tent footprint on the property. Reverse mirrors the furniture layout within that footprint, without moving the tent. Save changes in the project for the crew.</p>
+          </div>
           <button className="primary" style={{width:'100%',margin:'5px 0 12px'}} onClick={()=>setInteriorId(chosen.id)}>Edit Interior — Tables, Chairs & Stage</button>
           <div className="grid">
             <button onClick={()=>{const angle=(chosen.rotation+15)%360;editTent({rotation:angle});setRotationDraft(String(angle));}}>Rotate +15°</button>
@@ -546,9 +561,19 @@ function App(){
       <section ref={addSectionRef} className="add-tent-section"><h3>New tent settings</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Place a new tent</button>{tool==='place'&&<div className="placement-controls"><strong>Placement mode is active</strong><p>Click once on the map to add your tent. You'll immediately be able to edit its layer.</p><button onClick={cancelTent}>Cancel placement</button></div>}</section>
       <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Save editable project (.json)</button><label className="filebutton">Open editable project (.json)<input type="file" accept=".json" onChange={importFile}/></label><div className="grid image-exports"><button disabled={!token} onClick={()=>exportImage('png')}>Export PNG</button><button disabled={!token} onClick={()=>exportImage('jpg')}>Export JPG</button></div><p className="hint">JSON is an offline editable backup. PNG/JPG are pictures. When signed in and linked to a cloud project, changes autosave to Appwrite; otherwise this browser keeps a local copy.</p></section>
     </aside>
-    <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">Click on the map to place your tent. Press Cancel placement to exit.</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
+    <main className="map-panel"><div className="map-top">
+      <label className="map-project-label" title="Edit the project name">
+        <span className="sr-only">Project name</span>
+        <input className="map-project-name" type="text" maxLength={255}
+          value={project.name||''} placeholder="Name this project"
+          onChange={e=>setProject(p=>({...p,name:e.target.value}),{group:'project-name'})}/>
+        <span className="map-edit-icon" aria-hidden="true">✎</span>
+      </label>
+      <span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span>
+    </div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">Click on the map to place your tent. Press Cancel placement to exit.</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
     {interiorTent&&<InteriorPlanner tent={interiorTent} onChange={saveInterior}
       onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo}
+      onShowSite={()=>{setProject(p=>({...p,tents:p.tents.map(t=>t.id===interiorId?{...t,showInteriorOnMap:true}:t)}));setSelected(interiorId);setInteriorId(null);requestAnimationFrame(()=>mapRef.current?.resize());}}
       onClose={()=>{setInteriorId(null);requestAnimationFrame(()=>mapRef.current?.resize());}}/>}
   </div>;
 }
