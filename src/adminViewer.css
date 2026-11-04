@@ -22,3 +22,12 @@
 .admin-preview-overlay input{width:16px;height:16px;accent-color:#19ac94}
 .admin-preview-status{position:absolute;z-index:7;bottom:15px;left:15px;right:15px;background:#522c2ce8;padding:12px;border:1px solid #dc8b8b;border-radius:8px;font-size:12px}
 @media(max-width:760px){.admin-preview-backdrop{padding:0}.admin-preview-shell{border-radius:0}.admin-preview-header{align-items:start;flex-direction:column}.admin-preview-main{flex-direction:column}.admin-preview-sidebar{width:100%;max-height:33%;border-top:1px solid #4a606c;border-left:0}.admin-preview-map{min-height:280px}}
+
+.admin-preview-overlays{position:absolute;z-index:6;top:12px;left:12px;padding:10px 12px;background:#19343be3;border-radius:9px;border:1px solid #5fae9b;display:flex;flex-direction:column;gap:8px;color:#e8fff5;font-size:12px}
+.admin-preview-overlays label{display:flex;align-items:center;gap:8px;cursor:pointer}
+.admin-preview-overlays input{width:16px;height:16px;accent-color:#19ac94}
+.admin-preview-logistics-heading{margin-top:18px!important;padding-top:13px;border-top:1px solid #49636a}
+.admin-preview-mark{display:flex;align-items:center;gap:8px;width:100%;background:#243d47;border:1px solid #45636c;padding:10px 8px;border-radius:7px;text-align:left;color:#f4ffff;margin:5px 0}
+.admin-preview-mark>span:last-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.admin-preview-mark strong{font-size:11px}
+.admin-preview-mark small{font-size:10px;line-height:1.5;overflow-wrap:anywhere;color:#c6dde0}
