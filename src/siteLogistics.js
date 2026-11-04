@@ -22,6 +22,15 @@ export const LOGISTICS_TYPES=[
   {id:'restroom',name:'Restrooms / portable toilets',kind:'pin',color:'#c9e3b4'},
   {id:'note',name:'Site instruction / hazard note',kind:'pin',color:'#eef0ff'}
 ];
+export const LOGISTICS_CHECKS=[
+  {id:'truck',name:'Confirm truck access, gate width and turning space'},
+  {id:'terrain',name:'Walk the site for grades, ruts, mud and soft ground'},
+  {id:'overhead',name:'Check overhead clearance for trucks, lifts and tents'},
+  {id:'utilities',name:'Locate buried utilities, sprinklers and no-stake areas'},
+  {id:'ground',name:'Plan plywood/ground mats and lawn protection'},
+  {id:'unload',name:'Confirm unloading and staging locations with site contact'},
+  {id:'emergency',name:'Keep emergency routes and exits unobstructed'}
+];
 export const logisticsType=id=>LOGISTICS_TYPES.find(t=>t.id===id)||LOGISTICS_TYPES[0];
 const validPoint=p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)&&Math.abs(p[0])<=180&&Math.abs(p[1])<=90;
 const closeLine=pts=>[...pts,pts[0]];
