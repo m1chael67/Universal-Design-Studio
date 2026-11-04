@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {LOGISTICS_TYPES,logisticsType,routeFeet,siteFeet,defaultPathWidth} from './siteLogistics.js';
+import {LOGISTICS_TYPES,LOGISTICS_CHECKS,logisticsType,routeFeet,siteFeet,defaultPathWidth} from './siteLogistics.js';
 import './siteLogistics.css';
 
 const polygonAreaFt2=points=>{
@@ -21,7 +21,7 @@ export function logisticsDescription(item){
   if(t.kind==='area')return (polygonAreaFt2(item.points||[])).toFixed(0)+' sq ft';
   return 'Map pin';
 }
-export default function SiteLogisticsPanel({jumpToken,items,draft,selected,onSelect,onStart,onFinish,onCancel,onBack,onChange,onRemove,onZoom}){
+export default function SiteLogisticsPanel({jumpToken,items,draft,selected,checklist={},onChecklistChange,onSelect,onStart,onFinish,onCancel,onBack,onChange,onRemove,onZoom}){
   const [open,setOpen]=useState(true);
   useEffect(()=>{if(jumpToken>0)setOpen(true);},[jumpToken]);
   const [category,setCategory]=useState('unload');
@@ -102,6 +102,14 @@ export default function SiteLogisticsPanel({jumpToken,items,draft,selected,onSel
           </div>}
         </div>)}
       </div>}
+      <details className="site-readiness">
+        <summary>Site readiness checklist — {LOGISTICS_CHECKS.filter(c=>checklist[c.id]).length}/{LOGISTICS_CHECKS.length} checked</summary>
+        <p className="hint">A planning reminder, not proof that a condition is safe. Check each item after verifying it in the field.</p>
+        {LOGISTICS_CHECKS.map(c=><label key={c.id} className="site-readiness-row">
+          <input type="checkbox" checked={Boolean(checklist[c.id])} onChange={e=>onChecklistChange(c.id,e.target.checked)}/>
+          <span>{c.name}</span>
+        </label>)}
+      </details>
       <p className="hint">Route lengths and zone sizes are satellite-map estimates. Verify road width, slopes, muddy ground, overhead clearance, utility locations, load limits, and emergency access on-site.</p>
     </>}
   </section>;
