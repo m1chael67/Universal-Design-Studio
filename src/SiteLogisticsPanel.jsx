@@ -22,7 +22,7 @@ export function logisticsDescription(item){
   return 'Map pin';
 }
 export default function SiteLogisticsPanel({jumpToken,items,draft,selected,checklist={},onChecklistChange,onSelect,onStart,onFinish,onCancel,onBack,onChange,onRemove,onZoom,onFitAll}){
-  const [open,setOpen]=useState(true);
+  const [open,setOpen]=useState(false);
   useEffect(()=>{if(jumpToken>0)setOpen(true);},[jumpToken]);
   const [category,setCategory]=useState('unload');
   const [shape,setShape]=useState('polygon');
