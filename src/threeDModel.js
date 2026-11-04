@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {westCoastProfile} from './westCoastProfile.js';
 import {resolveStairHeights} from './stageMatching.js';
 import {addTentDimensions,addStageDimension} from './threeDDimensions.js';
+import {stage3DGeometry,stair3DGeometry} from './stage3DGeometry.js';
 import {clamp,normalizedInterior,tentDimensions,getWallSegments,objectPosition,sitePlacements,siteRadius} from './tent3DMath.js';
 
 const STEEL=0x86969b;
@@ -275,44 +276,49 @@ function addFurniture(root,layout,length,width,showDimensions=false){
         cube(group,w/columns-.025,.12,d/rows-.025,-w/2+w*(ix+.5)/columns,.1,-d/2+d*(iz+.5)/rows,
           (ix+iz)%2?0xddd3d4:0xb39faf);
     }else if(type==='stage'){
-      // Modular 4 × 4 ft black stage decks; the saved height is deck-top height.
-      const deckHeight=clamp((Number(o.heightInches)||16)/12,.333,6);
-      const deckThickness=.12;
-      const columns=Math.max(1,Math.round(w/4)),rows=Math.max(1,Math.round(d/4));
-      for(let ix=0;ix<columns;ix++)for(let iz=0;iz<rows;iz++){
-        const cw=w/columns,cd=d/rows;
-        const cx=-w/2+(ix+.5)*cw,cz=-d/2+(iz+.5)*cd;
-        cube(group,cw-.025,deckThickness,cd-.025,cx,deckHeight-deckThickness/2,cz,0x17191d);
-        // Each black deck remains an individual 4x4-foot section in 3D.
-        // A thin aluminum rim gives scale without making the deck look thicker.
+      const deck=stage3DGeometry(w,d,o.heightInches);
+      // One black top per 4-by-4-foot Bil-Jax panel with an actual seam
+      // between panels, supported by its own aluminum frame.
+      for(const panel of deck.panels){
+        const {x,z,width:pw,depth:pd}=panel;
+        cube(group,pw-.055,deck.thicknessFeet,pd-.055,
+          x,deck.topFeet-deck.thicknessFeet/2,z,0x131619);
+        // The bright metal outline is BELOW the top: the visible deck is
+        // black, and the slim sections can be counted from a distance.
+        const frameY=deck.topFeet-deck.thicknessFeet-.055;
         for(const edge of [-1,1]){
-          cube(group,cw-.04,.035,.025,cx,deckHeight-.13,cz+edge*(cd/2-.03),0x656a6e);
-          cube(group,.025,.035,cd-.04,cx+edge*(cw/2-.03),deckHeight-.13,cz,0x656a6e);
-        }
-        // Separate under-deck frame and support legs on every module.
-        for(const zz of [-cd*.38,cd*.38]){
-          cube(group,cw*.88,.055,.065,cx,deckHeight-.18,cz+zz,0x555b60);
-        }
-        for(const xx of [-cw*.39,cw*.39])for(const zz of [-cd*.39,cd*.39]){
-          cube(group,.075,Math.max(.1,deckHeight-.17),.075,cx+xx,(deckHeight-.17)/2,cz+zz,0x6b7073);
+          cube(group,pw-.07,.075,.08,x,frameY,z+edge*(pd/2-.10),0x69727a);
+          cube(group,.08,.075,pd-.07,x+edge*(pw/2-.10),frameY,z,0x69727a);
         }
       }
-      if(showDimensions)addStageDimension(group,deckHeight);
+      // A single leg at EVERY grid corner/intersection, rather than four
+      // inset legs on each section (which were duplicated at each seam).
+      for(const point of deck.legPoints){
+        const legHeight=deck.supportTopFeet;
+        cube(group,.11,legHeight,.11,point.x,legHeight/2,point.z,0x8d949a);
+        cube(group,.22,.045,.22,point.x,.025,point.z,0x686f75);
+        cube(group,.18,.065,.18,point.x,legHeight-.03,point.z,0x9ba2a7);
+      }
+      if(showDimensions)addStageDimension(group,deck.topFeet,w,d);
+      group.userData.item.heightInches=Math.round(deck.topFeet*12);
+      group.userData.item.sections=deck.columns+' × '+deck.rows;
+      group.userData.item.legCount=deck.legPoints.length;
     }else if(type==='stairs'){
-      // Interior 2D's yellow TOP / STAGE marker is the local -Y edge.
-      // The planner maps local +Y to world +Z, so local -Y is local -Z here.
-      // Highest tread MUST be nearest that edge, including after rotation.
-      const topHeight=clamp((Number(o.heightInches)||16)/12,.333,6);
-      const stepCount=Math.max(2,Math.ceil(topHeight/.58));
-      const treadRun=d/stepCount;
-      for(let i=0;i<stepCount;i++){
-        const stepHeight=topHeight*(stepCount-i)/stepCount;
-        const z=-d/2+(i+.5)*treadRun;
-        cube(group,w-.06,Math.max(.03,stepHeight-.06),treadRun-.025,0,(stepHeight-.06)/2,z,0x35383c);
-        cube(group,w-.06,.06,treadRun-.025,0,stepHeight-.03,z,0x191b1e);
+      // 2D yellow TOP/STAGE line is on local -Y; mapped 3D high edge is
+      // local -Z. Rotate the whole staircase exactly like the planner.
+      const stairs=stair3DGeometry(d,o.heightInches);
+      for(const tread of stairs.treads){
+        const {z,heightFeet,runFeet}=tread;
+        cube(group,w-.04,Math.max(.04,heightFeet-.065),runFeet-.018,
+          0,(heightFeet-.065)/2,z,0x44494d);
+        cube(group,w-.04,.065,runFeet-.018,
+          0,heightFeet-.0325,z,0x202327);
       }
-      // High-edge marker makes the stair direction visually unambiguous in 3D.
-      cube(group,w-.12,.015,.065,0,topHeight+.015,-d/2+.065,0xf4cc57);
+      // The yellow marker sits ON the highest tread at the stage-facing
+      // edge, in the same local direction as its 2D counterpart.
+      cube(group,w-.1,.018,.08,0,stairs.topFeet+.013,
+        stairs.topEdgeZ+.065,0xf6d45e);
+      group.userData.item.heightInches=Math.round(stairs.topFeet*12);
     }else if(type==='bar'){
       cube(group,w,.24,d,0,3.4,0,0x90a971);
       cube(group,w*.88,3.25,.15,0,1.63,-d*.32,0x728866);
