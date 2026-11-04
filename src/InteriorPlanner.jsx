@@ -1,5 +1,6 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import './interior.css';
+import {recommendSeating,SEATING_TABLE_OPTIONS} from './layoutOptimizer.js';
 
 const CATALOG = [
   {key:'round5',title:'60″ round table',type:'round',w:5,h:5,color:'#68c5ba'},
@@ -9,12 +10,10 @@ const CATALOG = [
   {key:'cocktail',title:'Cocktail table',type:'round',w:2.5,h:2.5,color:'#68c5ba'},
   {key:'folding',title:'Folding chair',type:'chair',w:1.65,h:1.65,color:'#9aaddc'},
   {key:'chiavari',title:'Chiavari chair',type:'chair',w:1.65,h:1.65,color:'#9aaddc'},
-  {key:'stage4x8',title:'Stage 4 × 8',type:'stage',w:8,h:4,color:'#e7b66c'},
-  {key:'stage8x8',title:'Stage 8 × 8',type:'stage',w:8,h:8,color:'#e7b66c'},
-  {key:'dance12',title:'Dance floor 12 × 12',type:'dance',w:12,h:12,color:'#d7a6cb'},
-  {key:'dance16',title:'Dance floor 16 × 16',type:'dance',w:16,h:16,color:'#d7a6cb'},
+  {key:'stage',title:'Bil-Jax stage (4 ft sections)',type:'stage',w:4,h:4,color:'#e7b66c'},
+  {key:'dance',title:'Dance floor (3 ft panels)',type:'dance',w:12,h:12,color:'#d7a6cb'},
   {key:'bar',title:'Bar 8 ft',type:'bar',w:8,h:3,color:'#a4c782'},
-  {key:'buffet',title:'Buffet table 8 ft',type:'table',w:8,h:2.5,color:'#68c5ba'}
+  // No buffet table preset; regular tables can be repurposed manually.
 ];
 const WALLS=['top','right','bottom','left'];
 const uid=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():'p-'+Date.now()+'-'+Math.random().toString(36).slice(2);
@@ -27,11 +26,40 @@ function exceedsTent(o,w,h){
   return o.x-dx<-.01||o.x+dx>w+.01||o.y-dy<-.01||o.y+dy>h+.01;
 }
 const norm=(layout)=>({
+  orientation:layout?.orientation||null,
   objects:Array.isArray(layout?.objects)?layout.objects:[],
   doors:Array.isArray(layout?.doors)?layout.doors:[],
   measurements:Array.isArray(layout?.measurements)?layout.measurements:[],
   sidewalls:{top:false,right:false,bottom:false,left:false,...(layout?.sidewalls||{})}
 });
+// Existing floor plans were vertical. Rotate their saved geometry clockwise once,
+// rather than losing positions or simply swapping labels on the new landscape view.
+function landscape(layout,tentWidth){
+  const old=norm(layout);
+  if(old.orientation==='landscape-v1')return old;
+  const p=point=>({x:Number(point.y)||0,y:tentWidth-(Number(point.x)||0)});
+  const turn=angle=>(((Number(angle)||0)-90)%360+360)%360;
+  const doorMap={top:'left',right:'top',bottom:'right',left:'bottom'};
+  return {
+    ...old,orientation:'landscape-v1',
+    objects:old.objects.map(o=>({...o,...p(o),rot:turn(o.rot)})),
+    doors:old.doors.map(d=>({...d,wall:doorMap[d.wall]||'left',
+      at:d.wall==='top'||d.wall==='bottom'?tentWidth-(Number(d.at)||0):(Number(d.at)||0)})),
+    measurements:old.measurements.map(m=>({...m,a:p(m.a),b:p(m.b)})),
+    sidewalls:{top:old.sidewalls.right,right:old.sidewalls.bottom,bottom:old.sidewalls.left,left:old.sidewalls.top}
+  };
+}
+function itemDescription(o){
+  if(!o)return '';
+  const fmtSize=n=>Number(n)%1===0?String(n):Number(n).toFixed(2).replace(/0+$/,'').replace(/\\.$/,'');
+  if(o.type==='round')return o.catalog==='cocktail'?'Cocktail table ('+fmtSize(o.w)+' ft)':
+    (Math.round(Number(o.w)*12)+'″ round table');
+  if(o.type==='table')return fmtSize(o.w)+' ft rectangular table';
+  if(o.type==='stage')return 'Bil-Jax stage '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
+  if(o.type==='dance')return 'Dance floor '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
+  if(o.type==='chair')return o.catalog==='chiavari'?'Chiavari chair':'Folding chair';
+  return o.label||o.type;
+}
 function XYField({label,value,min=0,max=2000,step=0.25,onCommit}){
   const [raw,setRaw]=useState(String(value));
   const ref=useRef(null);
@@ -49,7 +77,8 @@ function ItemShape({item,selected,press,outside}){
   const caption=type==='chair'?'':type==='round'?'TABLE':type==='stage'?'STAGE':type==='dance'?'DANCE FLOOR':type==='bar'?'BAR':'TABLE';
   const fontSize=Math.max(.5,Math.min(1.05,w/5,h/2.6));
   return <g transform={`translate(${item.x},${item.y}) rotate(${item.rot||0})`}
-    onPointerDown={e=>press(e,'move',item)} onClick={e=>e.stopPropagation()} className="ip-item" aria-label={item.label}>
+    onPointerDown={e=>press(e,'move',item)} onClick={e=>e.stopPropagation()} className="ip-item" aria-label={itemDescription(item)}>
+    <title>{itemDescription(item)}</title>
     {rounded?<ellipse rx={w/2} ry={h/2} fill={clr} fillOpacity=".83" stroke={outline} strokeWidth={selected?0.2:0.08}/>:
       <rect x={-w/2} y={-h/2} width={w} height={h} rx={type==='chair'?0.24:0.12} fill={clr} fillOpacity=".85" stroke={outline} strokeWidth={selected?0.2:0.08}/>}
     {type==='chair'&&<path d={`M ${-w*.3} ${-h*.22} L ${w*.3} ${-h*.22}`} stroke="#263a54" strokeWidth=".18" strokeLinecap="round"/>}
@@ -76,8 +105,9 @@ function doorPosition(d,w,h){
   return wall==='top'?[at,0]:wall==='bottom'?[at,h]:wall==='right'?[w,at]:[0,at];
 }
 export default function InteriorPlanner({tent,onChange,onClose}){
-  const w=Number(tent.width)||20,h=Number(tent.length)||40;
-  const layout=norm(tent.interior);
+  // Present the tent with its LENGTH across the top and its WIDTH on the side.
+  const w=Number(tent.length)||40,h=Number(tent.width)||20;
+  const layout=landscape(tent.interior,h);
   const [selected,setSelected]=useState(null);
   const [mode,setMode]=useState('select');
   const [zoom,setZoom]=useState(1);
@@ -94,6 +124,9 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     return ()=>obs?.disconnect();
   },[]);
   useEffect(()=>{setSelected(null);setMode('select');setMeasureStart(null);setZoom(1);},[tent.id]);
+  useEffect(()=>{
+    if(tent.interior?.orientation!=='landscape-v1')onChange(landscape(tent.interior,Number(tent.width)||20));
+  },[tent.id,tent.interior?.orientation]);
   const chosen=layout.objects.find(o=>o.id===selected);
   const chosenDoor=layout.doors.find(o=>'door:'+o.id===selected);
   const pad=3.5;
@@ -262,7 +295,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   return <div className="ip-shell" role="dialog" aria-modal="true" aria-label="Tent interior floor planner">
     <header className="ip-header">
       <button className="ip-back" onClick={onClose}>← Back to site</button>
-      <div className="ip-heading"><strong>{tent.name?.trim()||'Tent interior'}</strong><span>{w} × {h} ft · {fmt(w*h)} sq ft</span></div>
+      <div className="ip-heading"><strong>{tent.name?.trim()||'Tent interior'}</strong><span>Width {h} ft (side) × Length {w} ft (top) · {fmt(w*h)} sq ft</span></div>
       <div className="ip-zoom">
         <button onClick={()=>setZoom(z=>cap(z/1.25,.25,12))} title="Zoom out">−</button>
         <span>{Math.round(zoom*100)}%</span>
@@ -290,7 +323,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
         </section>
         <section><h3>Selected item</h3>
           {chosen?<div className="ip-fields">
-            <strong>{chosen.label}</strong>
+            <strong>{itemDescription(chosen)}</strong>
             <div className="ip-field-grid">
               <XYField key={chosen.id+'x'} label="X position (ft)" value={Number(chosen.x.toFixed(2))} onCommit={x=>updateObject(chosen.id,{x})} max={w}/>
               <XYField key={chosen.id+'y'} label="Y position (ft)" value={Number(chosen.y.toFixed(2))} onCommit={y=>updateObject(chosen.id,{y})} max={h}/>
