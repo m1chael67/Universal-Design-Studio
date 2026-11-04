@@ -74,7 +74,7 @@ function XYField({label,value,min=0,max=2000,step=0.25,onCommit}){
   }
   return <label className="ip-field">{label}<input ref={ref} type="number" step={step} min={min} max={max} value={raw} onChange={e=>setRaw(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==='Enter'&&e.currentTarget.blur()}/></label>;
 }
-function ItemShape({item,selected,press,outside}){
+function ItemShape({item,selected,press,outside,showHandle=true}){
   const {w,h,type}=item,clr=(CATALOG.find(c=>c.key===item.catalog)?.color)||'#b2c0c9';
   const rounded=type==='round';
   const outline=outside?'#ff796d':selected?'#ffda8b':'#e8f5f8';
@@ -94,7 +94,7 @@ function ItemShape({item,selected,press,outside}){
       <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038">{caption}</text>
       {['stage','dance','stairs','bar'].includes(type)&&<text textAnchor="middle" y={Math.min(h*.21,1)} dominantBaseline="central" fontWeight="700" fontSize={Math.min(.9,fontSize*.78)} fill="#183038">{number(w)} × {number(h)} ft</text>}
     </g>}
-    {selected&&<>
+    {selected&&showHandle&&<>
       <line x1="0" y1={-h/2} x2="0" y2={-h/2-1.6} stroke="#ffdd92" strokeWidth=".16"/>
       <circle cx="0" cy={-h/2-1.6} r=".68" fill="#ffd078" stroke="#25343d" strokeWidth=".16"
         className="ip-rotation-handle" onPointerDown={e=>{e.stopPropagation();press(e,'rotate',item);}}/>
@@ -484,10 +484,10 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     <div className="ip-workspace">
       <aside className="ip-panel" ref={panelRef}>
         <div className="ip-quick-bar">
-          <button onClick={()=>{setPanels(p=>({...p,catalog:true}));setOptimizerOpen(false);}}>+ Equipment</button>
+          <button onClick={()=>{setSelected(null);setSelectedIds([]);setPanels(p=>({...p,catalog:true}));setOptimizerOpen(false);panelRef.current?.scrollTo({top:0,behavior:'smooth'});}}>+ Equipment</button>
           <button className={mode==='select'?'selected':''} onClick={()=>{setMode('select');setMeasureStart(null);}}>Select</button>
           <button className={mode==='measure'?'selected':''} onClick={()=>{setMode('measure');setSelected(null);setSelectedIds([]);setOptimizerPreview(null);}}>Measure</button>
-          <button className={optimizerOpen?'selected':''} onClick={()=>{setOptimizerOpen(x=>!x);setPanels(p=>({...p,catalog:false}));}}>Optimize</button>
+          <button className={optimizerOpen?'selected':''} onClick={()=>{setSelected(null);setSelectedIds([]);setOptimizerOpen(x=>!x);setPanels(p=>({...p,catalog:false}));panelRef.current?.scrollTo({top:0,behavior:'smooth'});}}>Optimize</button>
         </div>
         <section className="ip-inspector"><h3>Selection</h3>
           {selectedIds.length>1?<div className="ip-fields">
@@ -698,7 +698,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
             </g>}
             {layout.objects.map(item=><ItemShape key={item.id} item={item}
               selected={selectedIds.includes(item.id)||selected===item.id}
-              outside={exceedsTent(item,w,h)} press={beginDrag}/>)}
+              outside={exceedsTent(item,w,h)} showHandle={selectedIds.length<=1} press={beginDrag}/>)}
             {marquee&&<rect x={Math.min(marquee.start.x,marquee.end.x)} y={Math.min(marquee.start.y,marquee.end.y)}
               width={Math.abs(marquee.end.x-marquee.start.x)} height={Math.abs(marquee.end.y-marquee.start.y)}
               stroke="#9ef5e8" strokeWidth=".14" strokeDasharray=".45,.3" fill="#4cd5c2" fillOpacity=".18" pointerEvents="none"/>}
