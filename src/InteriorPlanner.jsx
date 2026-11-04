@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import './interior.css';
-import {recommendSeating,SEATING_TABLE_OPTIONS} from './layoutOptimizer.js';
+import {recommendSeating,SEATING_TABLE_OPTIONS,SEAT_COUNT_CHOICES} from './layoutOptimizer.js';
 
 const CATALOG = [
   {key:'round5',title:'60″ round table',type:'round',w:5,h:5,color:'#68c5ba'},
@@ -8,11 +8,13 @@ const CATALOG = [
   {key:'rect6',title:'6 ft banquet table',type:'table',w:6,h:2.5,color:'#68c5ba'},
   {key:'rect8',title:'8 ft banquet table',type:'table',w:8,h:2.5,color:'#68c5ba'},
   {key:'cocktail',title:'Cocktail table',type:'round',w:2.5,h:2.5,color:'#68c5ba'},
-  {key:'folding',title:'Folding chair',type:'chair',w:1.65,h:1.65,color:'#9aaddc'},
-  {key:'chiavari',title:'Chiavari chair',type:'chair',w:1.65,h:1.65,color:'#9aaddc'},
+  {key:'folding',title:'Folding chair',type:'chair',w:1.45,h:1.45,color:'#9aaddc'},
+  {key:'chiavari',title:'Chiavari chair',type:'chair',w:1.45,h:1.45,color:'#9aaddc'},
   {key:'stage',title:'Bil-Jax stage (4 ft sections)',type:'stage',w:4,h:4,color:'#e7b66c'},
   {key:'dance',title:'Dance floor (3 ft panels)',type:'dance',w:12,h:12,color:'#d7a6cb'},
-  {key:'bar',title:'Bar 8 ft',type:'bar',w:8,h:3,color:'#a4c782'},
+  {key:'bar6',title:'Bar 6 ft',type:'bar',w:6,h:2.5,color:'#a4c782'},
+  {key:'bar7',title:'Bar 7 ft',type:'bar',w:7,h:2.5,color:'#a4c782'},
+  {key:'stairs',title:'Stage stairs 3 × 4 ft',type:'stairs',w:3,h:4,color:'#e3a97e'},
   // No buffet table preset; regular tables can be repurposed manually.
 ];
 const WALLS=['top','right','bottom','left'];
@@ -58,6 +60,8 @@ function itemDescription(o){
   if(o.type==='stage')return 'Bil-Jax stage '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
   if(o.type==='dance')return 'Dance floor '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
   if(o.type==='chair')return o.catalog==='chiavari'?'Chiavari chair':'Folding chair';
+  if(o.type==='stairs')return 'Stage stairs '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
+  if(o.type==='bar')return 'Bar '+fmtSize(o.w)+' ft';
   return o.label||o.type;
 }
 function XYField({label,value,min=0,max=2000,step=0.25,onCommit}){
@@ -74,7 +78,9 @@ function ItemShape({item,selected,press,outside}){
   const {w,h,type}=item,clr=(CATALOG.find(c=>c.key===item.catalog)?.color)||'#b2c0c9';
   const rounded=type==='round';
   const outline=outside?'#ff796d':selected?'#ffda8b':'#e8f5f8';
-  const caption=type==='chair'?'':type==='round'?'TABLE':type==='stage'?'STAGE':type==='dance'?'DANCE FLOOR':type==='bar'?'BAR':'TABLE';
+  const number=n=>Number.isInteger(Number(n))?String(n):Number(n).toFixed(1);
+  const caption=type==='chair'?'':type==='round'?(item.catalog==='cocktail'?'Cocktail':(Math.round(w*12)+'″ round')):
+    type==='stage'?'STAGE':type==='dance'?'DANCE FLOOR':type==='stairs'?'STAIRS':type==='bar'?'BAR':number(w)+' ft TABLE';
   const fontSize=Math.max(.5,Math.min(1.05,w/5,h/2.6));
   return <g transform={`translate(${item.x},${item.y}) rotate(${item.rot||0})`}
     onPointerDown={e=>press(e,'move',item)} onClick={e=>e.stopPropagation()} className="ip-item" aria-label={itemDescription(item)}>
@@ -84,7 +90,10 @@ function ItemShape({item,selected,press,outside}){
     {type==='chair'&&<path d={`M ${-w*.3} ${-h*.22} L ${w*.3} ${-h*.22}`} stroke="#263a54" strokeWidth=".18" strokeLinecap="round"/>}
     {type==='stage'&&<><path d={`M ${-w/2} ${-h/2} L ${w/2} ${h/2} M ${w/2} ${-h/2} L ${-w/2} ${h/2}`} stroke="#866039" strokeWidth=".08" strokeOpacity=".6"/></>}
     {type==='dance'&&<><path d={`M ${-w/2} 0 H ${w/2} M 0 ${-h/2} V ${h/2}`} stroke="#806180" strokeWidth=".1" strokeDasharray=".7,.4"/></>}
-    {caption&&<text textAnchor="middle" dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038" pointerEvents="none">{caption}</text>}
+    {caption&&<g pointerEvents="none">
+      <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038">{caption}</text>
+      {['stage','dance','stairs','bar'].includes(type)&&<text textAnchor="middle" y={Math.min(h*.21,1)} dominantBaseline="central" fontWeight="700" fontSize={Math.min(.9,fontSize*.78)} fill="#183038">{number(w)} × {number(h)} ft</text>}
+    </g>}
     {selected&&<>
       <line x1="0" y1={-h/2} x2="0" y2={-h/2-1.6} stroke="#ffdd92" strokeWidth=".16"/>
       <circle cx="0" cy={-h/2-1.6} r=".68" fill="#ffd078" stroke="#25343d" strokeWidth=".16"
@@ -117,6 +126,10 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   const [optimizeMode,setOptimizeMode]=useState('replace');
   const [optimizeTable,setOptimizeTable]=useState('auto');
   const [optimizeChair,setOptimizeChair]=useState('folding');
+  const [seatCounts,setSeatCounts]=useState({round5:8,round6:10,rect6:6,rect8:8});
+  const [spacingOffset,setSpacingOffset]=useState(0);
+  const [wallBuffer,setWallBuffer]=useState(0);
+  const [maxTables,setMaxTables]=useState(80);
   const [optimizerPreview,setOptimizerPreview]=useState(null);
   const [measureStart,setMeasureStart]=useState(null);
   const [measureHover,setMeasureHover]=useState(null);
@@ -154,8 +167,9 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   const totalChairs=layout.objects.filter(o=>o.type==='chair').length;
   const outOfBounds=layout.objects.filter(o=>exceedsTent(o,w,h));
   const seatingIdeas=useMemo(()=>optimizerOpen?recommendSeating(layout,h,w,{
-    tableKey:optimizeTable,mode:optimizeMode,chairKey:optimizeChair
-  }):[],[optimizerOpen,tent.interior,h,w,optimizeTable,optimizeMode,optimizeChair]);
+    tableKey:optimizeTable,mode:optimizeMode,chairKey:optimizeChair,
+    seatCounts,spacingOffset,wallBuffer,maxTables
+  }):[],[optimizerOpen,tent.interior,h,w,optimizeTable,optimizeMode,optimizeChair,seatCounts,spacingOffset,wallBuffer,maxTables]);
   const counts=useMemo(()=>{
     const entries={};
     for(const o of layout.objects){const name=o.label||o.type;entries[name]=(entries[name]||0)+1;}
@@ -223,8 +237,8 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   }
   function seatingCount(o){
     if(!o||!['round','table'].includes(o.type)||['cocktail','buffet'].includes(o.catalog))return 0;
-    if(o.type==='round')return o.w>=5.75?10:8;
-    return Math.max(4,Math.min(12,Math.round(o.w/2)*2));
+    if(o.type==='round')return o.w>=5.75?seatCounts.round6:seatCounts.round5;
+    return o.w>=7?seatCounts.rect8:seatCounts.rect6;
   }
   function addChairsAround(){
     if(!chosen)return;
