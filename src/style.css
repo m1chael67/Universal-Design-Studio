@@ -81,3 +81,8 @@
 .site-layout-controls .grid button.active{background:#177a70;border-color:#67c9bc}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:650px){.map-project-name{font-size:13px;max-width:100%}.site-layout-controls .grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.quick-navigation{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.quick-navigation button{min-width:0;padding:10px 5px;font-size:12px;line-height:1.35;min-height:41px}
+.quick-navigation button:not(.primary){background:#245451;border-color:#398e84;color:#e9fffb}
+.site-logistics-anchor{scroll-margin-top:125px}
