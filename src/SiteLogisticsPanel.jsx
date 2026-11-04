@@ -28,7 +28,12 @@ export default function SiteLogisticsPanel({jumpToken,items,draft,selected,check
   const [shape,setShape]=useState('polygon');
   const [label,setLabel]=useState('');
   const [notes,setNotes]=useState('');
+  const [wasDrawing,setWasDrawing]=useState(false);
   const current=items.find(x=>x.id===selected);
+  useEffect(()=>{
+    if(draft){setWasDrawing(true);return;}
+    if(wasDrawing&&!selected){setCategory('unload');setShape('polygon');setLabel('');setNotes('');setWasDrawing(false);}
+  },[draft,selected,wasDrawing]);
   const chosen=logisticsType(category);
   function start(){
     const title=label.trim()||chosen.name;
