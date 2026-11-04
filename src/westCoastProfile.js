@@ -20,11 +20,16 @@ function frameSpans(length,width,family){
   if(family===30&&(length===40||length===50)){
     return length===40?[15,10,15]:[15,10,10,15];
   }
-  if(family===15&&length%15!==0&&length%10===0){
-    return Array.from({length:length/10},()=>10);
+  if(family===15){
+    const celinaMixed={
+      20:[10,10],40:[10,20,10],50:[10,15,15,10],
+      70:[15,15,10,15,15],80:[15,15,10,10,15,15],
+      100:[15,15,15,10,15,15,15],
+      110:[15,15,15,10,10,15,15,15]
+    };
+    if(celinaMixed[length])return celinaMixed[length];
   }
   const bay=profiles[family]?.bay||Math.min(20,Math.max(5,Math.floor(width/2)));
-  const exact=Number.isInteger(length/bay);
   // Unsupported lengths remain an explicit *approximation*, never labeled Celina BOM.
   const count=Math.max(1,Math.round(length/bay));
   return Array.from({length:count},()=>length/count);
@@ -52,7 +57,7 @@ export function westCoastProfile(length,width,eave=7){
     x:sign*(length/2-10),z:side*10,y:eave+rise*.5
   }))):[];
   const supported=Boolean(cfg)&&length>=width&&
-    (family!==15||length%10===0||length%15===0)&&
+    (family!==15||length%15===0||[20,40,50,70,80,100,110].includes(length))&&
     (family!==30||length%15===0||length===40||length===50);
   const bayCount=lengths.length;
   return {length,width,eave,ridge:eave+rise,rise,hip,left,right,
