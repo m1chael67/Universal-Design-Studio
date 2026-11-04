@@ -31,3 +31,7 @@
 .admin-preview-mark>span:last-child{display:flex;flex-direction:column;gap:4px;min-width:0}
 .admin-preview-mark strong{font-size:11px}
 .admin-preview-mark small{font-size:10px;line-height:1.5;overflow-wrap:anywhere;color:#c6dde0}
+
+.admin-preview-checklist{border:1px solid #526e6c;background:#273e40;border-radius:8px;padding:10px;margin:8px 0;font-size:11px}
+.admin-preview-checklist summary{cursor:pointer;font-weight:750;color:#d3f4e8}
+.admin-preview-checklist p{margin:7px 0;line-height:1.4;color:#cbdedc}
