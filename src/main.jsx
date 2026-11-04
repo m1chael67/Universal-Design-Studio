@@ -6,6 +6,7 @@ import './style.css';
 import InteriorPlanner from './InteriorPlanner.jsx';
 import CloudProjects from './CloudProjects.jsx';
 import {useProjectHistory} from './useProjectHistory.js';
+import {interiorGeoJSON} from './mapInterior.js';
 
 const FEET = 3.280839895;
 // Configure VITE_MAPBOX_PUBLIC_TOKEN once in Appwrite Sites environment variables.
@@ -203,6 +204,9 @@ function App(){
       ready.current=true;
       m.addSource('clearance',{type:'geojson',data:fc([])});
       m.addSource('tents',{type:'geojson',data:fc([])});
+      m.addSource('interior-objects',{type:'geojson',data:fc([])});
+      m.addSource('interior-labels',{type:'geojson',data:fc([])});
+      m.addSource('interior-directions',{type:'geojson',data:fc([])});
       m.addSource('selected-tent',{type:'geojson',data:fc([])});
       m.addSource('measure',{type:'geojson',data:fc([])});
       m.addSource('measure-preview',{type:'geojson',data:fc([])});
@@ -217,6 +221,19 @@ function App(){
       m.addLayer({id:'tent-outline',source:'tents',type:'line',paint:{'line-color':'#d8fff9','line-width':1.5}});
       m.addLayer({id:'selected-tent-fill',source:'selected-tent',type:'fill',paint:{'fill-color':'#ffce7d','fill-opacity':0.22}});
       m.addLayer({id:'selected-tent-border',source:'selected-tent',type:'line',paint:{'line-color':'#ffd078','line-width':3}});
+      // The interior plan geometry is always scaled to the parent tent.
+      m.addLayer({id:'interior-fills',source:'interior-objects',type:'fill',
+        paint:{'fill-color':['get','fill'],'fill-opacity':.78}});
+      m.addLayer({id:'interior-borders',source:'interior-objects',type:'line',
+        paint:{'line-color':'#102930','line-width':1}});
+      m.addLayer({id:'interior-text',source:'interior-labels',type:'symbol',
+        layout:{'text-field':['get','label'],'text-size':11,'text-font':['Open Sans Semibold','Arial Unicode MS Regular'],
+          'text-allow-overlap':false,'text-optional':true},
+        paint:{'text-color':'#152b34','text-halo-color':'#ecfcf4','text-halo-width':1.2}});
+      m.addLayer({id:'interior-ends',source:'interior-directions',type:'symbol',
+        layout:{'text-field':['get','label'],'text-size':10,'text-font':['Open Sans Semibold','Arial Unicode MS Regular'],
+          'text-offset':[0,-1],'text-allow-overlap':false},
+        paint:{'text-color':'#fff4c9','text-halo-color':'#152b34','text-halo-width':2}});
       m.addLayer({id:'measure-line',source:'measure',type:'line',paint:{'line-color':'#ffffff','line-width':2,'line-dasharray':[3,1]}});
       m.addLayer({id:'measure-preview-line',source:'measure-preview',type:'line',paint:{'line-color':'#ffffff','line-width':2,'line-dasharray':[1,1]}});
       m.addLayer({id:'measure-pin-circles',source:'measure-pins',type:'circle',paint:{
@@ -245,6 +262,10 @@ function App(){
       m.getSource('clearance')?.setData(polygonLayer(visibleTents,true));
       m.getSource('selected-tent')?.setData(polygonLayer(visibleTents.filter(t=>t.id===current.selected)));
       m.getSource('tent-dimensions')?.setData(tentDimensionLabels(visibleTents));
+      const overlay=interiorGeoJSON(visibleTents);
+      m.getSource('interior-objects')?.setData(overlay.polygons);
+      m.getSource('interior-labels')?.setData(overlay.labels);
+      m.getSource('interior-directions')?.setData(overlay.directions);
       m.getSource('measure')?.setData(measurementPath(current.points,current.measureClosed));
       const last=current.points[current.points.length-1];
       const hover=current.measureCursor;
