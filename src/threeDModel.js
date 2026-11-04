@@ -283,6 +283,12 @@ function addFurniture(root,layout,length,width,showDimensions=false){
         const cw=w/columns,cd=d/rows;
         const cx=-w/2+(ix+.5)*cw,cz=-d/2+(iz+.5)*cd;
         cube(group,cw-.025,deckThickness,cd-.025,cx,deckHeight-deckThickness/2,cz,0x17191d);
+        // Each black deck remains an individual 4x4-foot section in 3D.
+        // A thin aluminum rim gives scale without making the deck look thicker.
+        for(const edge of [-1,1]){
+          cube(group,cw-.04,.035,.025,cx,deckHeight-.13,cz+edge*(cd/2-.03),0x656a6e);
+          cube(group,.025,.035,cd-.04,cx+edge*(cw/2-.03),deckHeight-.13,cz,0x656a6e);
+        }
         // Separate under-deck frame and support legs on every module.
         for(const zz of [-cd*.38,cd*.38]){
           cube(group,cw*.88,.055,.065,cx,deckHeight-.18,cz+zz,0x555b60);
@@ -293,15 +299,20 @@ function addFurniture(root,layout,length,width,showDimensions=false){
       }
       if(showDimensions)addStageDimension(group,deckHeight);
     }else if(type==='stairs'){
-      // The near (-Z) edge is the HIGH end, matching the TOP / STAGE marker in 2D.
+      // Interior 2D's yellow TOP / STAGE marker is the local -Y edge.
+      // The planner maps local +Y to world +Z, so local -Y is local -Z here.
+      // Highest tread MUST be nearest that edge, including after rotation.
       const topHeight=clamp((Number(o.heightInches)||16)/12,.333,6);
       const stepCount=Math.max(2,Math.ceil(topHeight/.58));
       const treadRun=d/stepCount;
       for(let i=0;i<stepCount;i++){
         const stepHeight=topHeight*(stepCount-i)/stepCount;
-        cube(group,w-.05,stepHeight,treadRun-.02,0,stepHeight/2,-d/2+(i+.5)*treadRun,0x393b3e);
-        cube(group,w-.05,.06,treadRun-.02,0,stepHeight,-d/2+(i+.5)*treadRun,0x17191c);
+        const z=-d/2+(i+.5)*treadRun;
+        cube(group,w-.06,Math.max(.03,stepHeight-.06),treadRun-.025,0,(stepHeight-.06)/2,z,0x35383c);
+        cube(group,w-.06,.06,treadRun-.025,0,stepHeight-.03,z,0x191b1e);
       }
+      // High-edge marker makes the stair direction visually unambiguous in 3D.
+      cube(group,w-.12,.015,.065,0,topHeight+.015,-d/2+.065,0xf4cc57);
     }else if(type==='bar'){
       cube(group,w,.24,d,0,3.4,0,0x90a971);
       cube(group,w*.88,3.25,.15,0,1.63,-d*.32,0x728866);
