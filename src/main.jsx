@@ -45,7 +45,50 @@ function RotationDial({angle,onChange}){
   </div><span className="dial-help">Drag the handle to turn the tent</span></div>;
 }
 const polygonLayer = (tents,clearance=false) => fc(tents.map(t=>({type:'Feature',properties:{id:t.id,label:t.width+' × '+t.length+' ft'},geometry:{type:'Polygon',coordinates:[corners(t,clearance?t.clearance:0)]}})));
-const measureLayer = points => fc(points.length===2?[{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:points}}]:[]);
+// Show one label for repeated edge lengths (within 0.03 ft).
+function uniqueSegmentLabels(segments,kind){
+  const seen=[];
+  return fc(segments.flatMap(([a,b,value])=>{
+    const feet=Number.isFinite(value)?value:distance(a,b);
+    if(feet<0.03||seen.some(n=>Math.abs(n-feet)<=0.03))return [];
+    seen.push(feet);
+    return [{type:'Feature',properties:{label:feet.toFixed(2)+' ft',kind},geometry:{type:'Point',coordinates:[(a[0]+b[0])/2,(a[1]+b[1])/2]}}];
+  }));
+}
+function tentDimensionLabels(tents){
+  return fc(tents.flatMap(t=>{
+    const p=corners(t);
+    return uniqueSegmentLabels([[p[0],p[1],Number(t.width)],[p[1],p[2],Number(t.length)],[p[2],p[3],Number(t.width)],[p[3],p[0],Number(t.length)]],'tent').features;
+  }));
+}
+function measurementPath(points,closed){
+  if(points.length<2)return fc([]);
+  const coords=closed&&points.length>=3?[...points,points[0]]:points;
+  return fc([{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:coords}}]);
+}
+function measurementLabels(points,cursor,closed){
+  if(!points.length)return fc([]);
+  const path=closed&&points.length>=3?[...points,points[0]]:points;
+  const segments=[];
+  for(let i=1;i<path.length;i++)segments.push([path[i-1],path[i]]);
+  if(cursor&&!closed)segments.push([points[points.length-1],cursor]);
+  return uniqueSegmentLabels(segments,'measure');
+}
+function measurementPins(points){
+  return fc(points.map((p,i)=>({type:'Feature',properties:{start:i===0?1:0},geometry:{type:'Point',coordinates:p}})));
+}
+function snapToStart(map,screenPoint,points){
+  if(points.length<3)return false;
+  const p=map.project(points[0]);
+  return Math.hypot(p.x-screenPoint.x,p.y-screenPoint.y)<=17;
+}
+function totalMeasuredFeet(points,closed){
+  if(points.length<2)return 0;
+  let total=0;
+  for(let i=1;i<points.length;i++)total+=distance(points[i-1],points[i]);
+  if(closed&&points.length>=3)total+=distance(points[points.length-1],points[0]);
+  return total;
+}
 function fromStore(key,defaultValue){try{const value=localStorage.getItem(key);return value?JSON.parse(value):defaultValue;}catch{return defaultValue;}}
 function App(){
   const [project,setProject]=useState(()=>fromStore('uds-project',{name:'New site plan',center:[-90.1994,38.627],zoom:17,tents:[]}));
@@ -58,18 +101,30 @@ function App(){
   const [matches,setMatches]=useState([]);
   const [tool,setTool]=useState('select');
   const [points,setPoints]=useState([]);
+  const [measureCursor,setMeasureCursor]=useState(null);
+  const [measureClosed,setMeasureClosed]=useState(false);
+  const [nearStart,setNearStart]=useState(false);
   const [selected,setSelected]=useState(null);
   const [pendingTent,setPendingTent]=useState(null);
+  const [widthDraft,setWidthDraft]=useState('20');
+  const [lengthDraft,setLengthDraft]=useState('40');
   const [rotationDraft,setRotationDraft]=useState('0');
   const [clearanceDraft,setClearanceDraft]=useState('4');
   const [width,setWidth]=useState('20'),[length,setLength]=useState('40'),[rotation,setRotation]=useState('0'),[clearance,setClearance]=useState('4');
   const mapDiv=useRef(null),mapRef=useRef(null),ready=useRef(false),drag=useRef(null),live=useRef({});
+  const addSectionRef=useRef(null);
   const tents=Array.isArray(project.tents)?project.tents:[];
   const chosen=tents.find(t=>t.id===selected);
-  live.current={tool,tents,points,selected,width,length,rotation,clearance,pendingTent};
+  live.current={tool,tents,points,measureCursor,measureClosed,selected,width,length,rotation,clearance,pendingTent};
+  // Do not overwrite a field while the user is editing it or while the dial moves.
   useEffect(()=>{
-    if(chosen){setRotationDraft(String(chosen.rotation));setClearanceDraft(String(chosen.clearance));}
-  },[selected,chosen?.rotation,chosen?.clearance]);
+    if(chosen){
+      setWidthDraft(String(chosen.width));
+      setLengthDraft(String(chosen.length));
+      setRotationDraft(String(chosen.rotation));
+      setClearanceDraft(String(chosen.clearance));
+    }
+  },[selected]);
   useEffect(()=>{try{localStorage.setItem('uds-project',JSON.stringify(project));}catch{}},[project]);
   // The raster satellite tileset is unavailable on some Mapbox Demo accounts,
   // even when vector-based street styles work. Check the actual tileset response
