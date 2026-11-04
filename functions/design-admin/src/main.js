@@ -1,4 +1,4 @@
-import {Client,Users,TablesDB,Query} from 'node-appwrite';
+import {Client,Account,Users,TablesDB,Query} from 'node-appwrite';
 
 // Deploy as a separate Appwrite Node.js Function.
 // It MUST be invoked through Appwrite's authenticated Functions SDK.
@@ -16,16 +16,20 @@ function validId(v){return /^[a-zA-Z0-9._-]{1,36}$/.test(String(v||''));}
 
 export default async ({req,res,error})=>{
   const caller=req.headers['x-appwrite-user-id'];
+  const jwt=req.headers['x-appwrite-user-jwt'];
   const allowed=process.env.DESIGN_ADMIN_USER_ID;
   const secret=process.env.DESIGN_ADMIN_API_KEY;
   if(!allowed||!validId(allowed)||!secret)return response(res,503,{error:'Admin function not configured'});
-  if(!caller||caller!==allowed)return response(res,403,{error:'Admin access denied'});
+  if(!caller||caller!==allowed||!jwt)return response(res,403,{error:'Admin access denied'});
   try{
+    // Verify the invoking session against Appwrite itself. A caller-supplied
+    // x-appwrite-user-id header alone is NEVER sufficient for admin access.
+    const sessionClient=new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID).setJWT(jwt);
+    const verified=await new Account(sessionClient).get();
+    if(verified.$id!==allowed||verified.email?.toLowerCase()!=='michael@universalrentalstl.com')
+      return response(res,403,{error:'Admin account mismatch'});
     const client=new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID).setKey(secret);
     const users=new Users(client),tables=new TablesDB(client);
-    const requestingUser=await users.get({userId:caller});
-    if(requestingUser.email?.toLowerCase()!=='michael@universalrentalstl.com')
-      return response(res,403,{error:'Admin account mismatch'});
 
     const allUsers=[],allRows=[];
     let usersTruncated=false,projectsTruncated=false;
