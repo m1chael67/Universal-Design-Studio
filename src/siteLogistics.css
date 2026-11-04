@@ -1,0 +1,28 @@
+.site-logistics{margin:9px 12px;padding:0!important;background:#19333c;border:1px solid #43817c;border-radius:9px;overflow:hidden}
+.site-logistics-toggle{display:flex;justify-content:space-between;align-items:center;width:100%;padding:14px 12px!important;background:#205b58!important;color:#eafff9!important;font-size:13px!important;font-weight:750!important;border:1px solid #38877e!important;border-radius:8px!important;text-align:left!important}
+.site-logistics-toggle span:last-child{font-size:20px}
+.site-logistics>p,.site-logistics>.site-logistics-new,.site-logistics>.site-logistics-drawing,.site-logistics>.site-logistics-list{margin:10px 12px}
+.site-logistics .hint{font-size:11px;color:#c4dce1;line-height:1.6}
+.site-logistics-new,.site-logistics-drawing{display:grid;gap:9px}
+.site-logistics label,.site-logistics-edit label{display:block;color:#d0e2e4;font-size:12px;font-weight:650;line-height:1.5}
+.site-logistics label>input,.site-logistics label>select,.site-logistics label>textarea,.site-logistics-edit input,.site-logistics-edit textarea{display:block;width:100%;margin-top:5px;box-sizing:border-box;min-width:0;border-radius:7px;background:#102630;color:#f2faf9;border:1px solid #4d8085;padding:9px;font-size:13px;line-height:1.5}
+.site-logistics input:focus,.site-logistics textarea:focus,.site-logistics select:focus{outline:2px solid #62c9b5;border-color:#62c9b5}
+.site-logistics button:disabled{opacity:.38;cursor:not-allowed}
+.site-logistics-btn-row{display:flex;flex-wrap:wrap;gap:6px}
+.site-logistics-btn-row button{flex:1;min-width:70px;font-size:11px;padding:10px 5px;border-radius:7px;line-height:1.35}
+.site-logistics-btn-row button.active{background:#16796f;border-color:#67e1ce;color:#fff}
+.site-logistics-drawing{padding:11px;background:#294540;border:1px solid #60b29b;border-radius:8px}
+.site-logistics-drawing strong{font-size:13px}
+.site-logistics-drawing p{font-size:11px;line-height:1.5;margin:0;color:#d7e7df}
+.site-logistics-new>.primary{width:100%;min-height:40px}
+.site-logistics-list-title{display:block;font-size:12px;margin:12px 0 8px}
+.site-logistics-entry{display:flex;flex-wrap:wrap;gap:4px;border:1px solid #425f69;border-radius:8px;margin:6px 0;padding:4px;background:#1b3841}
+.site-logistics-entry.selected{border-color:#7edcc6;background:#264c4b}
+.site-logistics-list-item{flex:1;display:flex;gap:8px;align-items:center;min-width:0;text-align:left;background:#28454c!important;border:0!important;padding:9px 5px!important}
+.site-logistics-list-item>span:last-child{min-width:0;display:flex;flex-direction:column;gap:4px}
+.site-logistics-list-item b{font-size:11px;overflow-wrap:anywhere}
+.site-logistics-list-item small{font-size:10px;color:#c2d3d5}
+.site-logistics-dot{height:12px;width:12px;flex:0 0 12px;border-radius:50%;border:1px solid #fff9}
+.site-logistics-eye{flex:0 0 30px;width:30px;padding:0!important;font-size:17px}
+.site-logistics-edit{flex:0 0 100%;display:grid;gap:9px;padding:8px}
+.site-logistics-danger{color:#ffe3e3!important;background:#613c3e!important;border-color:#b17472!important}
