@@ -1,6 +1,7 @@
 import React,{useState} from 'react';
 import {Client,Functions,ExecutionMethod} from 'appwrite';
 import './admin.css';
+import AdminProjectViewer from './AdminProjectViewer.jsx';
 
 const FUNCTION_ID=import.meta.env.VITE_DESIGN_ADMIN_FUNCTION_ID||'6aeb52cf002f8a6dd6a9';
 const client=new Client().setEndpoint('https://nyc.cloud.appwrite.io/v1').setProject('6aea8c410001e8aed9b1');
@@ -12,6 +13,8 @@ export default function AdminPanel({user}){
   const [response,setResponse]=useState(null);
   const [error,setError]=useState('');
   const [filter,setFilter]=useState('');
+  const [preview,setPreview]=useState(null);
+  const [viewingId,setViewingId]=useState(null);
   if(user?.email?.toLowerCase()!=='michael@universalrentalstl.com')return null;
 
   async function refresh(){
@@ -35,6 +38,23 @@ export default function AdminPanel({user}){
       setResponse(data);
     }catch(e){setError(String(e?.message||e));}
     finally{setLoading(false);}
+  }
+  async function viewProject(row){
+    if(viewingId)return;
+    setViewingId(row.id);setError('');
+    try{
+      const execution=await functions.createExecution({
+        functionId:FUNCTION_ID,body:JSON.stringify({action:'viewProject',projectId:row.id}),
+        async:false,method:ExecutionMethod.POST
+      });
+      const result=JSON.parse(execution.responseBody||'{}');
+      if(execution.responseStatusCode!==200||result.error)
+        throw Error(result.error||'Admin preview failed: HTTP '+execution.responseStatusCode);
+      if(!result.project||!Array.isArray(result.project.plan?.tents))
+        throw Error('Project preview needs the updated Admin Function. Redeploy the Function from main, then try again.');
+      setPreview(result.project);
+    }catch(err){setError(String(err?.message||err));}
+    finally{setViewingId(null);}
   }
   const accountMap=new Map((response?.accounts||[]).map(account=>[account.id,account]));
   const accounts=(response?.accounts||[]).filter(account=>
@@ -74,16 +94,25 @@ export default function AdminPanel({user}){
                 <small>Created {new Date(account.createdAt).toLocaleDateString()} · ID {account.id}</small>
                 {projects.map(p=><div key={p.id} className="uds-admin-project">
                   <strong>{p.name}</strong><small>{p.tents} tents · {p.interiorObjects} interior objects · Updated {new Date(p.updatedAt).toLocaleString()}</small>
+                  <button type="button" disabled={!!viewingId} onClick={()=>viewProject(p)}>
+                    {viewingId===p.id?'Opening…':'View site plan'}
+                  </button>
                 </div>)}
                 {!projects.length&&<p className="cloud-note">No saved cloud projects.</p>}
               </div>
             </details>;
           })}
           {!!orphaned.length&&<details className="uds-admin-account"><summary>Projects with missing owner account ({orphaned.length})</summary>
-            {orphaned.map(p=><div className="uds-admin-project" key={p.id}>{p.name} — owner {p.ownerId}</div>)}
+            {orphaned.map(p=><div className="uds-admin-project" key={p.id}>
+              {p.name} — owner {p.ownerId}
+              <button onClick={()=>viewProject(p)} disabled={!!viewingId}>View site plan</button>
+            </div>)}
           </details>}
         </div>
       </>}
     </div>}
+    {preview&&<AdminProjectViewer record={preview}
+      owner={accountMap.get(preview.ownerId)?.email||preview.ownerId}
+      onClose={()=>setPreview(null)}/>}
   </section>;
 }
