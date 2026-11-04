@@ -1,0 +1,19 @@
+.uds-admin-panel{border:1px solid #52786e;border-radius:8px;background:#1c3941;margin:12px 0}
+.uds-admin-trigger{display:flex!important;justify-content:space-between;align-items:center;gap:8px;width:100%;font-size:11px!important;font-weight:750!important;background:#235b56!important;padding:11px 9px!important;border:1px solid #49988c!important;text-align:left!important;color:#e7faf7!important}
+.uds-admin-trigger span:last-child{font-size:17px}
+.uds-admin-body{padding:10px;font-size:12px}
+.uds-admin-quick-links{display:flex;flex-wrap:wrap;gap:9px;margin:9px 0}
+.uds-admin-quick-links a{color:#aff3e7;text-decoration:underline;font-size:11px;line-height:1.45}
+.uds-admin-actions button{width:100%;padding:8px!important}
+.uds-admin-stats{display:flex;justify-content:space-between;gap:6px;margin:12px 0;border-radius:7px;background:#2a4952;padding:11px 7px;font-weight:750;font-size:11px}
+.uds-admin-search{background:#10252d!important;border:1px solid #628a88!important;border-radius:8px;padding:11px 9px;width:100%;color:#e9f8f4!important;font-size:11px!important;min-width:0}
+.uds-admin-account-list{max-height:340px;overflow:auto;margin-top:11px}
+.uds-admin-account{border:1px solid #3c6065;border-radius:8px;margin:7px 0;background:#263f49;overflow:hidden}
+.uds-admin-account summary{display:flex;gap:9px;justify-content:space-between;align-items:center;cursor:pointer;padding:10px;list-style:none;overflow-wrap:anywhere;font-size:11px}
+.uds-admin-account summary strong{min-width:0;overflow-wrap:anywhere}
+.uds-admin-account summary small{flex-shrink:0;color:#b6ddd4}
+.uds-admin-account-detail{border-top:1px solid #4d6f73;padding:10px;line-height:1.5}
+.uds-admin-account-detail>small{font-size:10px;color:#b7d0d2;overflow-wrap:anywhere}
+.uds-admin-project{background:#1b333c;border-radius:7px;padding:9px;margin:7px 0;display:flex;flex-direction:column;gap:4px}
+.uds-admin-project strong{font-size:12px;overflow-wrap:anywhere}
+.uds-admin-project small{font-size:10px;color:#c1d4d8}
