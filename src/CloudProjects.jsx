@@ -169,6 +169,7 @@ export default function CloudProjects({project,measurement,onLoadProject}){
   },[project,measurement.points,measurement.closed,activeId,user?.$id]);
   async function createCloudCopy(payload=latestPayload.current){
     if(!user)return false;
+    if(pending.current){try{await pending.current;}catch{}}
     setBusy(true);setError('');
     try{
       const value=JSON.stringify(payload);
@@ -186,6 +187,7 @@ export default function CloudProjects({project,measurement,onLoadProject}){
   }
   async function openCloud(row){
     if(row.$id===activeIdRef.current)return;
+    if(pending.current){try{await pending.current;}catch{}}
     if(activeIdRef.current&&savedHash.current!==JSON.stringify(latestPayload.current)){
       const okay=await saveNow();
       if(!okay){setError('The current plan could not be saved. Resolve the save error or use Save as new cloud project before switching.');return;}
