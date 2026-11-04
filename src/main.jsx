@@ -11,7 +11,8 @@ const MAP_STYLES = {
   streets: 'mapbox://styles/mapbox/streets-v12'
 };
 const radians = deg => deg * Math.PI / 180;
-const clamp = (v,min,max,fallback) => Number.isFinite(+v) ? Math.max(min,Math.min(max,+v)) : fallback;
+const clamp = (v,min,max,fallback) => { const n=typeof v==='string'&&v.trim()===''?NaN:Number(v); return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback; };
+const cleanedFilename = name => (name || 'site-plan').replace(/[^a-z0-9_-]+/gi,'-').replace(/^-|-$/g,'').slice(0,64) || 'site-plan';
 const distance = (a,b) => {
   const R=6371008.8, dLat=radians(b[1]-a[1]), dLon=radians(b[0]-a[0]);
   const h=Math.sin(dLat/2)**2+Math.cos(radians(a[1]))*Math.cos(radians(b[1]))*Math.sin(dLon/2)**2;
@@ -25,6 +26,24 @@ function corners(t,extra=0){
   });
 }
 const fc = features => ({type:'FeatureCollection',features});
+function RotationDial({angle,onChange}){
+  const ref=useRef(null);
+  function update(e){
+    const rect=ref.current.getBoundingClientRect();
+    const x=e.clientX-rect.left-rect.width/2, y=e.clientY-rect.top-rect.height/2;
+    onChange(Math.round((Math.atan2(x,-y)*180/Math.PI+360)%360));
+  }
+  return <div className="rotation-wrap"><div
+    ref={ref} className="rotation-dial" role="slider" tabIndex={0}
+    aria-label="Drag to rotate selected tent" aria-valuemin={0} aria-valuemax={359} aria-valuenow={Math.round(angle)}
+    onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);update(e);}}
+    onPointerMove={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))update(e);}}
+    onPointerUp={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
+    onPointerCancel={e=>{if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
+    onKeyDown={e=>{if(e.key==='ArrowRight'||e.key==='ArrowUp'){e.preventDefault();onChange((angle+1)%360);}else if(e.key==='ArrowLeft'||e.key==='ArrowDown'){e.preventDefault();onChange((angle+359)%360);}}}>
+    <span className="dial-n">N</span><div className="dial-indicator" style={{transform:`rotate(${angle}deg)`}}><span/></div><span className="dial-center">{Math.round(angle)}°</span>
+  </div><span className="dial-help">Drag the handle to turn the tent</span></div>;
+}
 const polygonLayer = (tents,clearance=false) => fc(tents.map(t=>({type:'Feature',properties:{id:t.id,label:t.width+' × '+t.length+' ft'},geometry:{type:'Polygon',coordinates:[corners(t,clearance?t.clearance:0)]}})));
 const measureLayer = points => fc(points.length===2?[{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:points}}]:[]);
 function fromStore(key,defaultValue){try{const value=localStorage.getItem(key);return value?JSON.parse(value):defaultValue;}catch{return defaultValue;}}
@@ -40,10 +59,17 @@ function App(){
   const [tool,setTool]=useState('select');
   const [points,setPoints]=useState([]);
   const [selected,setSelected]=useState(null);
-  const [width,setWidth]=useState(40),[length,setLength]=useState(80),[rotation,setRotation]=useState(0),[clearance,setClearance]=useState(10);
+  const [pendingTent,setPendingTent]=useState(null);
+  const [rotationDraft,setRotationDraft]=useState('0');
+  const [clearanceDraft,setClearanceDraft]=useState('4');
+  const [width,setWidth]=useState('20'),[length,setLength]=useState('40'),[rotation,setRotation]=useState('0'),[clearance,setClearance]=useState('4');
   const mapDiv=useRef(null),mapRef=useRef(null),ready=useRef(false),drag=useRef(null),live=useRef({});
   const tents=Array.isArray(project.tents)?project.tents:[];
-  live.current={tool,tents,points,selected,width,length,rotation,clearance};
+  const chosen=tents.find(t=>t.id===selected);
+  live.current={tool,tents,points,selected,width,length,rotation,clearance,pendingTent};
+  useEffect(()=>{
+    if(chosen){setRotationDraft(String(chosen.rotation));setClearanceDraft(String(chosen.clearance));}
+  },[selected,chosen?.rotation,chosen?.clearance]);
   useEffect(()=>{try{localStorage.setItem('uds-project',JSON.stringify(project));}catch{}},[project]);
   // The raster satellite tileset is unavailable on some Mapbox Demo accounts,
   // even when vector-based street styles work. Check the actual tileset response
@@ -68,7 +94,7 @@ function App(){
     if(!token||!mapDiv.current)return;
     mapboxgl.accessToken=token;
     let m;
-    try{m=new mapboxgl.Map({container:mapDiv.current,style:MAP_STYLES[mapStyle],center:project.center||[-90.1994,38.627],zoom:project.zoom||17});
+    try{m=new mapboxgl.Map({container:mapDiv.current,style:MAP_STYLES[mapStyle],center:project.center||[-90.1994,38.627],zoom:project.zoom||17,preserveDrawingBuffer:true});
     }catch(err){setStatus('Map failed: '+err.message);return;}
     mapRef.current=m;ready.current=false;setStatus('Loading satellite imagery…');
     m.addControl(new mapboxgl.NavigationControl(),'top-right');
@@ -87,11 +113,16 @@ function App(){
       m.addSource('clearance',{type:'geojson',data:fc([])});
       m.addSource('tents',{type:'geojson',data:fc([])});
       m.addSource('measure',{type:'geojson',data:fc([])});
+      m.addSource('preview-tent',{type:'geojson',data:fc([])});
+      m.addSource('preview-clearance',{type:'geojson',data:fc([])});
       m.addLayer({id:'clearance-fill',source:'clearance',type:'fill',paint:{'fill-color':'#ffc46b','fill-opacity':.15}});
       m.addLayer({id:'clearance-line',source:'clearance',type:'line',paint:{'line-color':'#ffc46b','line-width':2,'line-dasharray':[3,2]}});
       m.addLayer({id:'tent-fill',source:'tents',type:'fill',paint:{'fill-color':'#46dccb','fill-opacity':.38}});
       m.addLayer({id:'tent-outline',source:'tents',type:'line',paint:{'line-color':'#d8fff9','line-width':3}});
       m.addLayer({id:'measure-line',source:'measure',type:'line',paint:{'line-color':'#ffffff','line-width':3,'line-dasharray':[2,1]}});
+      m.addLayer({id:'preview-clearance-line',source:'preview-clearance',type:'line',paint:{'line-color':'#ffcf79','line-width':3,'line-dasharray':[2,2]}});
+      m.addLayer({id:'preview-tent-fill',source:'preview-tent',type:'fill',paint:{'fill-color':'#ffc46b','fill-opacity':.28}});
+      m.addLayer({id:'preview-tent-outline',source:'preview-tent',type:'line',paint:{'line-color':'#ffe6a0','line-width':3,'line-dasharray':[3,1]}});
       sync();setStatus(mapStyle==='satellite'?'Satellite imagery ready':mapStyle==='hybrid'?'Satellite + streets ready':'Street map ready');
     });
     function sync(){
@@ -100,18 +131,22 @@ function App(){
       m.getSource('tents')?.setData(polygonLayer(current.tents));
       m.getSource('clearance')?.setData(polygonLayer(current.tents,true));
       m.getSource('measure')?.setData(measureLayer(current.points));
+      m.getSource('preview-tent')?.setData(polygonLayer(current.pendingTent?[current.pendingTent]:[]));
+      m.getSource('preview-clearance')?.setData(polygonLayer(current.pendingTent?[current.pendingTent]:[],true));
     }
     m.on('click',e=>{
       if(drag.current)return;
       const st=live.current;
       if(st.tool==='measure'){setPoints(p=>p.length>=2?[e.lngLat.toArray()]:[...p,e.lngLat.toArray()]);return;}
       if(st.tool==='place'){
-        const t={id:crypto.randomUUID(),lng:e.lngLat.lng,lat:e.lngLat.lat,width:clamp(st.width,1,2000,40),length:clamp(st.length,1,2000,80),rotation:clamp(st.rotation,0,359,0),clearance:clamp(st.clearance,0,200,10)};
-        setProject(p=>({...p,tents:[...(p.tents||[]),t]}));setSelected(t.id);setTool('select');return;
+        const t={id:crypto.randomUUID(),lng:e.lngLat.lng,lat:e.lngLat.lat,width:clamp(st.width,1,2000,20),length:clamp(st.length,1,2000,40),rotation:clamp(st.rotation,0,359,0),clearance:clamp(st.clearance,0,200,4)};
+        setPendingTent(t);return;
       }
       const hit=m.queryRenderedFeatures(e.point,{layers:['tent-fill']})[0];
       setSelected(hit?.properties?.id||null);
     });
+    m.on('mouseenter','tent-fill',()=>{if(live.current.tool==='select')m.getCanvas().style.cursor='move';});
+    m.on('mouseleave','tent-fill',()=>{m.getCanvas().style.cursor=live.current.tool==='select'?'default':'crosshair';});
     m.on('mousedown','tent-fill',e=>{
       if(live.current.tool!=='select')return;
       const id=e.features?.[0]?.properties?.id,t=live.current.tents.find(t=>t.id===id);
@@ -132,7 +167,11 @@ function App(){
     m.__udsSync=sync;
     return ()=>{ready.current=false;mapRef.current=null;m.remove();};
   },[token,mapStyle]);
-  useEffect(()=>{mapRef.current?.__udsSync?.();},[project.tents,points,selected,tool]);
+  useEffect(()=>{
+    const m=mapRef.current;
+    m?.__udsSync?.();
+    if(m) m.getCanvas().style.cursor=tool==='select'?'default':'crosshair';
+  },[project.tents,points,selected,tool,pendingTent]);
   function startMap(){if(!tokenText.trim().startsWith('pk.')){setStatus('Enter your public Mapbox token (starts with pk.).');return;}localStorage.setItem('uds-mapbox-token',tokenText.trim());setToken(tokenText.trim());}
   async function search(e){
     e.preventDefault();if(!token||!address.trim())return;
@@ -157,7 +196,6 @@ function App(){
       setSelected(null);setPoints([]);if(p.center)mapRef.current?.jumpTo({center:p.center,zoom:p.zoom||17});
     }catch(err){setStatus('Import failed: '+err.message);}
   }
-  const chosen=tents.find(t=>t.id===selected);
   return <div className="layout">
     <aside className="sidebar">
       <div className="brand"><span className="mark">U</span><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.1</small></div></div>
