@@ -10,9 +10,9 @@ function box(scene,w,h,d,x,y,z,col,rot=0){
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material(col));
   mesh.position.set(x,y,z);mesh.rotation.y=-rot*Math.PI/180;mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);return mesh;
 }
-function addTent(scene,tent,{roof,sidewalls,showFurniture,roofStyle='gable',legHeight=9,baySpacing=20}){
+function addTent(scene,tent,{roof,sidewalls,showFurniture,roofStyle='gable',legHeight=7,baySpacing=20}){
   const width=Math.max(2,Math.min(250,num(tent.length,40))),depth=Math.max(2,Math.min(250,num(tent.width,20)));
-  const eave=Math.max(6,Math.min(16,num(legHeight,9)));
+  const eave=Math.max(6,Math.min(16,num(legHeight,7)));
   const ridge=eave+(roofStyle==='flat'?0:Math.min(18,depth*(roofStyle==='highpeak'?.5:.28)));
   const bays=Math.max(1,Math.ceil(width/Math.max(5,num(baySpacing,20))));
   const white=0xe7e9e6;
@@ -84,7 +84,7 @@ export default function ThreeDViewer({tents,onClose}){
   const mount=useRef(null),renderRef=useRef(null);
   const [index,setIndex]=useState(0),[roofVisible,setRoofVisible]=useState(true),[wallVisible,setWallVisible]=useState(true),
     [furnitureVisible,setFurnitureVisible]=useState(true),[roofStyle,setRoofStyle]=useState('gable'),
-    [legHeight,setLegHeight]=useState(9),[baySpacing,setBaySpacing]=useState(20),[error,setError]=useState('');
+    [legHeight,setLegHeight]=useState(7),[baySpacing,setBaySpacing]=useState(20),[error,setError]=useState('');
   const choices=(tents||[]).filter(t=>!t.hidden);
   const tent=choices[Math.min(index,Math.max(0,choices.length-1))];
   useEffect(()=>{
@@ -136,7 +136,7 @@ export default function ThreeDViewer({tents,onClose}){
           <option value="gable">Standard gable</option><option value="highpeak">High peak</option><option value="flat">Flat canopy</option>
         </select></label>
         <label>Leg height<select value={legHeight} onChange={e=>setLegHeight(Number(e.target.value))}>
-          <option value="8">8 ft</option><option value="9">9 ft</option><option value="10">10 ft</option><option value="12">12 ft</option>
+          <option value="7">7 ft</option><option value="8">8 ft</option><option value="9">9 ft</option><option value="10">10 ft</option><option value="12">12 ft</option>
         </select></label>
         <label>Frame spacing<select value={baySpacing} onChange={e=>setBaySpacing(Number(e.target.value))}>
           <option value="10">10 ft</option><option value="15">15 ft</option><option value="20">20 ft</option>
