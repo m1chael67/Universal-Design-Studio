@@ -2,21 +2,24 @@
 // These shapes are conceptual annotations, not verified routing or driveability.
 const RAD=Math.PI/180;
 const metersPerFoot=0.3048;
-const single=type=>({type:'FeatureCollection',features:[]});
 export const LOGISTICS_TYPES=[
   {id:'parking',name:'Crew / guest parking',kind:'area',color:'#78d6ef'},
   {id:'unload',name:'Truck unloading',kind:'area',color:'#ffcb73'},
   {id:'staging',name:'Equipment staging',kind:'area',color:'#9bd69a'},
   {id:'no-go',name:'No-go / fragile turf',kind:'area',color:'#fa8588'},
+  {id:'soft-ground',name:'Soft / muddy ground',kind:'area',color:'#c0a1ad'},
   {id:'protected',name:'Ground protection / mats',kind:'area',color:'#a2a2ef'},
   {id:'utilities',name:'Utility hazard / overhead lines',kind:'area',color:'#f6a5bf'},
   {id:'turnaround',name:'Truck turnaround',kind:'area',color:'#dfbf8e'},
   {id:'vehicle',name:'Truck / equipment route',kind:'route',color:'#ffc15d'},
   {id:'grass',name:'Grass-safe cart route',kind:'route',color:'#66e6c3'},
   {id:'foot',name:'Crew / guest walking path',kind:'route',color:'#7acaff'},
+  {id:'accessible',name:'Accessible walkway',kind:'route',color:'#b6ee9d'},
   {id:'emergency',name:'Emergency access',kind:'route',color:'#f88888'},
   {id:'entrance',name:'Vehicle entry / gate',kind:'pin',color:'#f4eea4'},
   {id:'service',name:'Power / water connection',kind:'pin',color:'#ddade4'},
+  {id:'generator',name:'Generator / power distribution',kind:'pin',color:'#e7a6ce'},
+  {id:'restroom',name:'Restrooms / portable toilets',kind:'pin',color:'#c9e3b4'},
   {id:'note',name:'Site instruction / hazard note',kind:'pin',color:'#eef0ff'}
 ];
 export const logisticsType=id=>LOGISTICS_TYPES.find(t=>t.id===id)||LOGISTICS_TYPES[0];
@@ -47,6 +50,29 @@ export function makeCircle(center,edge,steps=40){
   });
   return closeLine(coords);
 }
+export function pathCorridor(a,b,widthFt){
+  if(!validPoint(a)||!validPoint(b)||!Number.isFinite(Number(widthFt))||Number(widthFt)<=0)return [];
+  const lat=(a[1]+b[1])/2*RAD;
+  const lngFeet=364567*Math.max(.1,Math.cos(lat)),latFeet=364000;
+  const dx=(b[0]-a[0])*lngFeet,dy=(b[1]-a[1])*latFeet;
+  const length=Math.hypot(dx,dy);
+  if(length<.001)return [];
+  const half=Math.min(100,Number(widthFt))/2;
+  const offsetLng=(-dy/length)*half/lngFeet,offsetLat=(dx/length)*half/latFeet;
+  return closeLine([
+    [a[0]+offsetLng,a[1]+offsetLat],
+    [b[0]+offsetLng,b[1]+offsetLat],
+    [b[0]-offsetLng,b[1]-offsetLat],
+    [a[0]-offsetLng,a[1]-offsetLat]
+  ]);
+}
+export function defaultPathWidth(type){
+  if(type==='vehicle')return 12;
+  if(type==='emergency')return 16;
+  if(type==='grass')return 6;
+  if(type==='accessible')return 5;
+  return 4;
+}
 function centroid(points){
   if(!points.length)return null;
   const lng=points.reduce((sum,p)=>sum+p[0],0)/points.length;
@@ -54,7 +80,7 @@ function centroid(points){
   return [lng,lat];
 }
 export function siteLogisticsGeoJSON(items=[],draft=null,hover=null,selectedId=null){
-  const layers={area:[],border:[],route:[],pins:[],labels:[],draft:[],draftPoints:[]};
+  const layers={area:[],border:[],route:[],corridor:[],pins:[],labels:[],draft:[],draftPoints:[]};
   const list=Array.isArray(items)?items:[];
   for(const item of list){
     if(!item||item.hidden)continue;
@@ -77,6 +103,11 @@ export function siteLogisticsGeoJSON(items=[],draft=null,hover=null,selectedId=n
       middle=centroid(points);
     }else if(category.kind==='route'&&points.length>=2){
       layers.route.push(feature('LineString',points,props));
+      const width=Number(item.widthFt)||defaultPathWidth(item.type);
+      for(let i=1;i<points.length;i++){
+        const ring=pathCorridor(points[i-1],points[i],width);
+        if(ring.length)layers.corridor.push(feature('Polygon',[ring],props));
+      }
       middle=points[Math.floor(points.length/2)];
       layers.pins.push(feature('Point',points[0],{...props,label:'START',endpoint:1}));
       layers.pins.push(feature('Point',points[points.length-1],{...props,label:'END',endpoint:1}));
