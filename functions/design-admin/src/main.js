@@ -1,35 +1,76 @@
-import { Client, Users } from 'node-appwrite';
+import {Client,Account,Users,TablesDB,Query} from 'node-appwrite';
 
-// This Appwrite function will be executed every time your function is triggered
-export default async ({ req, res, log, error }) => {
-  // You can use the Appwrite SDK to interact with other services
-  // For this example, we're using the Users service
-  const client = new Client()
-    .setEndpoint(process.env.APPWRITE_FUNCTION_API_ENDPOINT)
-    .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-    .setKey(req.headers['x-appwrite-key'] ?? '');
-  const users = new Users(client);
+const ENDPOINT=process.env.APPWRITE_FUNCTION_API_ENDPOINT||'https://nyc.cloud.appwrite.io/v1';
+const PROJECT_ID=process.env.APPWRITE_FUNCTION_PROJECT_ID||'6aea8c410001e8aed9b1';
+const DATABASE_ID='6aeb3dfa001293738040';
+const TABLE_ID='6aeb3e0500094b2a9ae4';
+const ADMIN_EMAIL='michael@universalrentalstl.com';
+const PAGE_LIMIT=100;
+const MAX_PAGES=10;
+const answer=(res,status,data)=>res.json(data,status);
 
-  try {
-    const response = await users.list();
-    // Log messages and errors to the Appwrite Console
-    // These logs won't be seen by your end users
-    log(`Total users: ${response.total}`);
-  } catch(err) {
-    error("Could not list users: " + err.message);
+export default async ({req,res,error})=>{
+  const authorizedId=process.env.DESIGN_ADMIN_USER_ID;
+  const serverKey=process.env.DESIGN_ADMIN_API_KEY;
+  if(!authorizedId||!serverKey)return answer(res,503,{error:'Admin Function is missing DESIGN_ADMIN_USER_ID or DESIGN_ADMIN_API_KEY.'});
+  const jwt=req.headers['x-appwrite-user-jwt'];
+  if(!jwt)return answer(res,401,{error:'Admin requires a signed-in Appwrite account.'});
+  try{
+    // Verify the actual user's session with Appwrite, not any values from request body.
+    const userClient=new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID).setJWT(jwt);
+    const caller=await new Account(userClient).get();
+    if(caller.$id!==authorizedId||caller.email?.toLowerCase()!==ADMIN_EMAIL){
+      return answer(res,403,{error:'This account is not authorized to view Design Studio administration.'});
+    }
+
+    // The server-only API key is used ONLY after the session has been verified.
+    const adminClient=new Client().setEndpoint(ENDPOINT).setProject(PROJECT_ID).setKey(serverKey);
+    const usersService=new Users(adminClient);
+    const db=new TablesDB(adminClient);
+
+    const accounts=[];
+    let cursor,usersTruncated=false;
+    for(let page=0;page<MAX_PAGES;page++){
+      const queries=[Query.limit(PAGE_LIMIT)];
+      if(cursor)queries.push(Query.cursorAfter(cursor));
+      const batch=await usersService.list({queries});
+      accounts.push(...batch.users.map(u=>({
+        id:u.$id,email:String(u.email||'').slice(0,256),name:String(u.name||'').slice(0,256),
+        createdAt:u.$createdAt,verified:Boolean(u.emailVerification),status:Boolean(u.status)
+      })));
+      if(batch.users.length<PAGE_LIMIT)break;
+      cursor=batch.users[batch.users.length-1].$id;
+      if(page===MAX_PAGES-1)usersTruncated=true;
+    }
+
+    const projects=[];
+    cursor=undefined;
+    let projectsTruncated=false;
+    for(let page=0;page<MAX_PAGES;page++){
+      const queries=[Query.limit(PAGE_LIMIT)];
+      if(cursor)queries.push(Query.cursorAfter(cursor));
+      const batch=await db.listRows({databaseId:DATABASE_ID,tableId:TABLE_ID,queries});
+      for(const row of batch.rows){
+        let tents=0,interiorObjects=0;
+        try{
+          const plan=JSON.parse(row.payload||'{}');
+          const list=Array.isArray(plan.tents)?plan.tents:[];
+          tents=list.length;
+          interiorObjects=list.reduce((sum,t)=>sum+(Array.isArray(t.interior?.objects)?t.interior.objects.length:0),0);
+        }catch{}
+        projects.push({id:row.$id,ownerId:String(row.ownerId||''),name:String(row.name||'Untitled').slice(0,256),
+          updatedAt:row.$updatedAt,tents,interiorObjects});
+      }
+      if(batch.rows.length<PAGE_LIMIT)break;
+      cursor=batch.rows[batch.rows.length-1].$id;
+      if(page===MAX_PAGES-1)projectsTruncated=true;
+    }
+    return answer(res,200,{accounts,projects,truncated:usersTruncated||projectsTruncated});
+  }catch(err){
+    error('Admin error: '+(err?.message||String(err)));
+    const message=(err?.code===401||err?.code===403)?
+      'Admin API key lacks required users.read / rows.read permissions, or the login session is invalid.':
+      'Admin Function could not load accounts and projects. Check its execution logs, credentials and database access.';
+    return answer(res,500,{error:message,code:err?.code||null});
   }
-
-  // The req object contains the request data
-  if (req.path === "/ping") {
-    // Use res object to respond with text(), json(), or binary()
-    // Don't forget to return a response!
-    return res.text("Pong");
-  }
-
-  return res.json({
-    motto: "Build like a team of hundreds_",
-    learn: "https://appwrite.io/docs",
-    connect: "https://appwrite.io/discord",
-    getInspired: "https://builtwith.appwrite.io",
-  });
 };
