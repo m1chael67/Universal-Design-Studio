@@ -86,3 +86,16 @@
 .quick-navigation button{min-width:0;padding:10px 5px;font-size:12px;line-height:1.35;min-height:41px}
 .quick-navigation button:not(.primary){background:#245451;border-color:#398e84;color:#e9fffb}
 .site-logistics-anchor{scroll-margin-top:125px}
+
+/* V1.1: concise accordion sections, all closed on page load. */
+.sidebar details.sidebar-collapsible{display:block;margin:0;border-bottom:1px solid #30424e;background:#17232e;padding:0;overflow:visible}
+.sidebar details.sidebar-collapsible>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;padding:17px 18px;margin:0;color:#f0f9f8;font-size:13px;font-weight:750;line-height:1.3;letter-spacing:.25px;user-select:none}
+.sidebar details.sidebar-collapsible>summary::-webkit-details-marker{display:none}
+.sidebar details.sidebar-collapsible>summary:after{content:'+';font-size:19px;font-weight:500;color:#91d8cf}
+.sidebar details.sidebar-collapsible[open]>summary:after{content:'−'}
+.sidebar details.sidebar-collapsible>summary:hover{background:#263c45}
+.sidebar details.sidebar-collapsible>.sidebar-collapsible-body{padding:0 17px 18px}
+.sidebar details.sidebar-collapsible .hint{margin-top:9px}
+.sidebar details.sidebar-collapsible .chosen{margin-top:12px}
+.sidebar details.sidebar-collapsible>.sidebar-collapsible-body>button{width:100%}
+.sidebar details.uds-cloud>.sidebar-collapsible-body{padding:0 17px 17px}
