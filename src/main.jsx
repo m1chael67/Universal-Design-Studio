@@ -74,8 +74,8 @@ function measurementLabels(points,cursor,closed){
   if(cursor&&!closed)segments.push([points[points.length-1],cursor]);
   return uniqueSegmentLabels(segments,'measure');
 }
-function measurementPins(points){
-  return fc(points.map((p,i)=>({type:'Feature',properties:{start:i===0?1:0},geometry:{type:'Point',coordinates:p}})));
+function measurementPins(points,nearStart=false){
+  return fc(points.map((p,i)=>({type:'Feature',properties:{start:i===0?1:0,snap:i===0&&nearStart?1:0},geometry:{type:'Point',coordinates:p}})));
 }
 function snapToStart(map,screenPoint,points){
   if(points.length<3)return false;
@@ -115,7 +115,7 @@ function App(){
   const addSectionRef=useRef(null);
   const tents=Array.isArray(project.tents)?project.tents:[];
   const chosen=tents.find(t=>t.id===selected);
-  live.current={tool,tents,points,measureCursor,measureClosed,selected,width,length,rotation,clearance,pendingTent};
+  live.current={tool,tents,points,measureCursor,measureClosed,nearStart,selected,width,length,rotation,clearance,pendingTent};
   // Do not overwrite a field while the user is editing it or while the dial moves.
   useEffect(()=>{
     if(chosen){
@@ -168,16 +168,34 @@ function App(){
       m.addSource('clearance',{type:'geojson',data:fc([])});
       m.addSource('tents',{type:'geojson',data:fc([])});
       m.addSource('measure',{type:'geojson',data:fc([])});
+      m.addSource('measure-preview',{type:'geojson',data:fc([])});
+      m.addSource('measure-pins',{type:'geojson',data:fc([])});
+      m.addSource('measure-labels',{type:'geojson',data:fc([])});
+      m.addSource('tent-dimensions',{type:'geojson',data:fc([])});
       m.addSource('preview-tent',{type:'geojson',data:fc([])});
       m.addSource('preview-clearance',{type:'geojson',data:fc([])});
       m.addLayer({id:'clearance-fill',source:'clearance',type:'fill',paint:{'fill-color':'#ffc46b','fill-opacity':.15}});
-      m.addLayer({id:'clearance-line',source:'clearance',type:'line',paint:{'line-color':'#ffc46b','line-width':2,'line-dasharray':[3,2]}});
+      m.addLayer({id:'clearance-line',source:'clearance',type:'line',paint:{'line-color':'#ffc46b','line-width':1.25,'line-dasharray':[3,2]}});
       m.addLayer({id:'tent-fill',source:'tents',type:'fill',paint:{'fill-color':'#46dccb','fill-opacity':.38}});
-      m.addLayer({id:'tent-outline',source:'tents',type:'line',paint:{'line-color':'#d8fff9','line-width':3}});
-      m.addLayer({id:'measure-line',source:'measure',type:'line',paint:{'line-color':'#ffffff','line-width':3,'line-dasharray':[2,1]}});
-      m.addLayer({id:'preview-clearance-line',source:'preview-clearance',type:'line',paint:{'line-color':'#ffcf79','line-width':3,'line-dasharray':[2,2]}});
+      m.addLayer({id:'tent-outline',source:'tents',type:'line',paint:{'line-color':'#d8fff9','line-width':1.5}});
+      m.addLayer({id:'measure-line',source:'measure',type:'line',paint:{'line-color':'#ffffff','line-width':2,'line-dasharray':[3,1]}});
+      m.addLayer({id:'measure-preview-line',source:'measure-preview',type:'line',paint:{'line-color':'#ffffff','line-width':2,'line-dasharray':[1,1]}});
+      m.addLayer({id:'measure-pin-circles',source:'measure-pins',type:'circle',paint:{
+        'circle-color':['case',['==',['get','start'],1],'#28d1bb','#ffffff'],
+        'circle-radius':['case',['==',['get','snap'],1],10,['==',['get','start'],1],6,4],
+        'circle-stroke-color':'#11252f','circle-stroke-width':2
+      }});
+      m.addLayer({id:'measure-distance-labels',source:'measure-labels',type:'symbol',layout:{
+        'text-field':['get','label'],'text-size':13,'text-font':['Open Sans Semibold','Arial Unicode MS Regular'],
+        'text-allow-overlap':true,'text-offset':[0,-0.9]
+      },paint:{'text-color':'#ffffff','text-halo-color':'#13272f','text-halo-width':2.5}});
+      m.addLayer({id:'tent-side-labels',source:'tent-dimensions',type:'symbol',layout:{
+        'text-field':['get','label'],'text-size':12,'text-font':['Open Sans Semibold','Arial Unicode MS Regular'],
+        'text-allow-overlap':true,'text-offset':[0,-0.8]
+      },paint:{'text-color':'#effff9','text-halo-color':'#153b3a','text-halo-width':2.5}});
+      m.addLayer({id:'preview-clearance-line',source:'preview-clearance',type:'line',paint:{'line-color':'#ffcf79','line-width':1.25,'line-dasharray':[2,2]}});
       m.addLayer({id:'preview-tent-fill',source:'preview-tent',type:'fill',paint:{'fill-color':'#ffc46b','fill-opacity':.28}});
-      m.addLayer({id:'preview-tent-outline',source:'preview-tent',type:'line',paint:{'line-color':'#ffe6a0','line-width':3,'line-dasharray':[3,1]}});
+      m.addLayer({id:'preview-tent-outline',source:'preview-tent',type:'line',paint:{'line-color':'#ffe6a0','line-width':1.75,'line-dasharray':[3,1]}});
       sync();setStatus(mapStyle==='satellite'?'Satellite imagery ready':mapStyle==='hybrid'?'Satellite + streets ready':'Street map ready');
     });
     function sync(){
@@ -185,14 +203,32 @@ function App(){
       const current=live.current;
       m.getSource('tents')?.setData(polygonLayer(current.tents));
       m.getSource('clearance')?.setData(polygonLayer(current.tents,true));
-      m.getSource('measure')?.setData(measureLayer(current.points));
+      m.getSource('tent-dimensions')?.setData(tentDimensionLabels(current.tents));
+      m.getSource('measure')?.setData(measurementPath(current.points,current.measureClosed));
+      const last=current.points[current.points.length-1];
+      const hover=current.measureCursor;
+      m.getSource('measure-preview')?.setData(
+        last&&hover&&!current.measureClosed?fc([{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:[last,hover]}}]):fc([])
+      );
+      m.getSource('measure-pins')?.setData(measurementPins(current.points,current.nearStart));
+      m.getSource('measure-labels')?.setData(measurementLabels(current.points,hover,current.measureClosed));
       m.getSource('preview-tent')?.setData(polygonLayer(current.pendingTent?[current.pendingTent]:[]));
       m.getSource('preview-clearance')?.setData(polygonLayer(current.pendingTent?[current.pendingTent]:[],true));
     }
     m.on('click',e=>{
       if(drag.current)return;
       const st=live.current;
-      if(st.tool==='measure'){setPoints(p=>p.length>=2?[e.lngLat.toArray()]:[...p,e.lngLat.toArray()]);return;}
+      if(st.tool==='measure'){
+        const point=e.lngLat.toArray();
+        if(st.measureClosed){
+          setPoints([point]);setMeasureClosed(false);setMeasureCursor(point);setNearStart(false);
+        }else if(snapToStart(m,e.point,st.points)){
+          setMeasureClosed(true);setMeasureCursor(null);setNearStart(false);
+        }else{
+          setPoints(p=>[...p,point]);setMeasureCursor(point);setNearStart(false);
+        }
+        return;
+      }
       if(st.tool==='place'){
         const t={id:crypto.randomUUID(),lng:e.lngLat.lng,lat:e.lngLat.lat,width:clamp(st.width,1,2000,20),length:clamp(st.length,1,2000,40),rotation:clamp(st.rotation,0,359,0),clearance:clamp(st.clearance,0,200,4)};
         setPendingTent(t);return;
@@ -210,13 +246,21 @@ function App(){
       setSelected(id);m.dragPan.disable();
     });
     m.on('mousemove',e=>{
-      if(!drag.current)return;
-      const d=drag.current;
-      const lng=d.lng+e.lngLat.lng-d.start[0],lat=d.lat+e.lngLat.lat-d.start[1];
-      setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===d.id?{...t,lng,lat}:t)}));
+      if(drag.current){
+        const d=drag.current;
+        const lng=d.lng+e.lngLat.lng-d.start[0],lat=d.lat+e.lngLat.lat-d.start[1];
+        setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===d.id?{...t,lng,lat}:t)}));
+        return;
+      }
+      const st=live.current;
+      if(st.tool==='measure'&&st.points.length&&!st.measureClosed){
+        const close=snapToStart(m,e.point,st.points);
+        setNearStart(close);
+        setMeasureCursor(close?st.points[0]:e.lngLat.toArray());
+      }
     });
     function endDrag(){if(drag.current){drag.current=null;m.dragPan.enable();}}
-    m.on('mouseup',endDrag);m.on('mouseout',endDrag);
+    m.on('mouseup',endDrag);m.on('mouseout',()=>{endDrag();setMeasureCursor(null);setNearStart(false);});
     m.on('moveend',()=>{const c=m.getCenter();setProject(p=>({...p,center:[c.lng,c.lat],zoom:m.getZoom()}));});
     // Refresh sources when React state changes (see next effect).
     m.__udsSync=sync;
@@ -226,7 +270,7 @@ function App(){
     const m=mapRef.current;
     m?.__udsSync?.();
     if(m) m.getCanvas().style.cursor=tool==='select'?'default':'crosshair';
-  },[project.tents,points,selected,tool,pendingTent]);
+  },[project.tents,points,measureCursor,measureClosed,nearStart,selected,tool,pendingTent]);
   function startMap(){if(!tokenText.trim().startsWith('pk.')){setStatus('Enter your public Mapbox token (starts with pk.).');return;}localStorage.setItem('uds-mapbox-token',tokenText.trim());setToken(tokenText.trim());}
   async function search(e){
     e.preventDefault();if(!token||!address.trim())return;
