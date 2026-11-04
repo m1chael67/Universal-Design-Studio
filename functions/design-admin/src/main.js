@@ -28,6 +28,25 @@ export default async ({req,res,error})=>{
     const usersService=new Users(adminClient);
     const db=new TablesDB(adminClient);
 
+    // Read-only project inspection. Never return raw cloud plans in the
+    // account-list response; fetch one only after verifying the admin JWT.
+    const input=(()=>{
+      try{return typeof req.bodyJson==='object'&&req.bodyJson?req.bodyJson:JSON.parse(req.bodyText||req.body||'{}');}
+      catch{return {};}
+    })();
+    if(input.action==='viewProject'){
+      const id=String(input.projectId||'');
+      if(!/^[a-zA-Z0-9._-]{1,36}$/.test(id))return answer(res,400,{error:'Invalid project ID'});
+      const row=await db.getRow({databaseId:DATABASE_ID,tableId:TABLE_ID,rowId:id});
+      let plan;
+      try{plan=JSON.parse(row.payload);}
+      catch{return answer(res,422,{error:'This project has invalid saved data'});}
+      if(!plan||!Array.isArray(plan.tents))return answer(res,422,{error:'The selected project is not a valid site plan'});
+      // Return the content only to the authenticated admin who requested it.
+      return answer(res,200,{project:{id:row.$id,ownerId:row.ownerId,
+        name:row.name,updatedAt:row.$updatedAt,plan}});
+    }
+    if(input.action&&input.action!=='list')return answer(res,400,{error:'Unsupported admin action'});
     const accounts=[];
     let cursor,usersTruncated=false;
     for(let page=0;page<MAX_PAGES;page++){
