@@ -122,7 +122,7 @@ function FoldSection({title,open,onToggle,children,count}){
     {open&&<div className="ip-fold-content">{children}</div>}
   </section>;
 }
-export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,canUndo,canRedo}){
+export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,canUndo,canRedo,onShowSite}){
   // Present the tent with its LENGTH across the top and its WIDTH on the side.
   const w=Number(tent.length)||40,h=Number(tent.width)||20;
   const layout=landscape(tent.interior,h);
@@ -497,6 +497,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
   return <div className="ip-shell" role="dialog" aria-modal="true" aria-label="Tent interior floor planner">
     <header className="ip-header">
       <button className="ip-back" onClick={onClose}>← Back to site</button>
+      <button className="ip-view-site" onClick={onShowSite}>View layout on satellite map</button>
       <div className="ip-heading"><strong>{tent.name?.trim()||'Tent interior'}</strong><span>Width {h} ft (side) × Length {w} ft (top) · {fmt(w*h)} sq ft</span></div>
       <div className="ip-history">
         <button onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl/⌘+Z)">↶ Undo</button>
