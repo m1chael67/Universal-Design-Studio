@@ -13,4 +13,5 @@ jobs:
         with:
           node-version: '22'
       - run: npm install
+      - run: node --test tests/layoutOptimizer.test.mjs
       - run: npm run build
