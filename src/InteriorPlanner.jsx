@@ -29,6 +29,7 @@ function exceedsTent(o,w,h){
 }
 const norm=(layout)=>({
   orientation:layout?.orientation||null,
+  chairSizing:layout?.chairSizing||null,
   objects:Array.isArray(layout?.objects)?layout.objects:[],
   doors:Array.isArray(layout?.doors)?layout.doors:[],
   measurements:Array.isArray(layout?.measurements)?layout.measurements:[],
@@ -159,8 +160,13 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   },[tent.id]);
   useEffect(()=>{if(selected||selectedIds.length)panelRef.current?.scrollTo({top:0,behavior:'smooth'});},[selected,selectedIds.join(',')]);
   useEffect(()=>{
-    if(tent.interior?.orientation!=='landscape-v1')onChange(landscape(tent.interior,Number(tent.width)||20));
-  },[tent.id,tent.interior?.orientation]);
+    if(tent.interior?.orientation!=='landscape-v1'||tent.interior?.chairSizing!=='compact-v1'){
+      const converted=landscape(tent.interior,Number(tent.width)||20);
+      onChange({...converted,chairSizing:'compact-v1',
+        objects:converted.objects.map(o=>o.type==='chair'&&Math.abs(o.w-1.65)<.01&&Math.abs(o.h-1.65)<.01?
+          {...o,w:1.45,h:1.45}:o)});
+    }
+  },[tent.id,tent.interior?.orientation,tent.interior?.chairSizing]);
   const chosen=layout.objects.find(o=>o.id===selected);
   const selectedMeasurement=layout.measurements.find(m=>'measure:'+m.id===selected);
   const alignmentGuide=chosen?(()=>{
@@ -547,7 +553,10 @@ export default function InteriorPlanner({tent,onChange,onClose}){
                 max={h} onCommit={y=>updateMeasurement(selectedMeasurement.id,{b:{...selectedMeasurement.b,y}})}/>
             </div>
             <button className="ip-danger ip-wide" onClick={removeSelected}>Delete measurement</button>
-          </div>:<p className="ip-help">Click an item to edit it. Drag over empty floor space to select several items. Doors and measurements can be selected from the map or their list below.</p>}
+          </div>:<div>
+            <p className="ip-help">Click an item to edit it, or drag over empty floor space to select several items. Doors and measurements can be selected directly or from their list below.</p>
+            {!!layout.objects.length&&<button className="ip-wide" onClick={()=>{setMode('select');setSelected(null);setSelectedIds(layout.objects.map(o=>o.id));}}>Select all {layout.objects.length} objects</button>}
+          </div>}
         </section>
         <section className="ip-optimizer-section"><button type="button" className="ip-section-toggle" onClick={()=>{setOptimizerOpen(v=>!v);setOptimizerPreview(null);}}>
           <span>Seating Layout Optimizer</span><span>{optimizerOpen?'−':'+'}</span>
