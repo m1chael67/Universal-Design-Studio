@@ -34,6 +34,7 @@ function App(){
   const [token,setToken]=useState('');
   const [mapStyle,setMapStyle]=useState('satellite');
   const [status,setStatus]=useState('Enter a Mapbox public token to begin.');
+  const [imageryAccess,setImageryAccess]=useState('unknown');
   const [address,setAddress]=useState('');
   const [matches,setMatches]=useState([]);
   const [tool,setTool]=useState('select');
@@ -44,6 +45,25 @@ function App(){
   const tents=Array.isArray(project.tents)?project.tents:[];
   live.current={tool,tents,points,selected,width,length,rotation,clearance};
   useEffect(()=>{try{localStorage.setItem('uds-project',JSON.stringify(project));}catch{}},[project]);
+  // The raster satellite tileset is unavailable on some Mapbox Demo accounts,
+  // even when vector-based street styles work. Check the actual tileset response
+  // so the UI does not incorrectly suggest switching styles will solve it.
+  useEffect(()=>{
+    if(!token)return;
+    let cancelled=false;
+    setImageryAccess('unknown');
+    (async()=>{
+      try{
+        const response=await fetch('https://api.mapbox.com/v4/mapbox.satellite.json?access_token='+encodeURIComponent(token));
+        if(cancelled)return;
+        if(response.status===401||response.status===403)setImageryAccess('blocked');
+        else if(response.ok)setImageryAccess('available');
+      }catch{
+        // Not conclusive: some browsers or networks can block diagnostic calls.
+      }
+    })();
+    return ()=>{cancelled=true;};
+  },[token]);
   useEffect(()=>{
     if(!token||!mapDiv.current)return;
     mapboxgl.accessToken=token;
@@ -54,7 +74,14 @@ function App(){
     m.addControl(new mapboxgl.NavigationControl(),'top-right');
     // On the Satellite setting, use Mapbox's dedicated imagery-only style.
     // Unlike street styles it has a raster imagery layer as its entire basemap.
-    m.on('error',ev=>{if(ev.error?.message){setStatus('Map error: '+ev.error.message);}});
+    m.on('error',ev=>{
+      if(!ev.error?.message)return;
+      const message=String(ev.error.message);
+      if(/mapbox\.satellite|satellite-v9|raster/i.test(message)&&/401|403|unauthorized|forbidden/i.test(message)){
+        setImageryAccess('blocked');
+      }
+      setStatus('Map error: '+message);
+    });
     m.on('load',()=>{
       ready.current=true;
       m.addSource('clearance',{type:'geojson',data:fc([])});
@@ -134,7 +161,7 @@ function App(){
   return <div className="layout">
     <aside className="sidebar">
       <div className="brand"><span className="mark">U</span><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.1</small></div></div>
-      <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p></section>
+      <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
       <section><h3>Tools</h3><div className="grid">{[['select','Select / drag'],['place','Place tent'],['measure','Measure']].map(([id,label])=><button key={id} className={tool===id?'active':''} disabled={!token} onClick={()=>{setTool(id);if(id==='measure')setPoints([]);}}>{label}</button>)}</div><p className="hint">{tool==='measure'?'Click two points on the map to measure a distance.':tool==='place'?'Click on the satellite map to position a tent.':'Click to select a tent; drag it to reposition.'}</p>{points.length===2&&<div className="measurement">Distance: {distance(points[0],points[1]).toFixed(1)} ft</div>}</section>
       <section><h3>New tent</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(+e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(+e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(+e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(+e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={()=>setTool('place')}>Place {width} × {length} tent</button></section>
       <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><button key={t.id} className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+'×'+t.length+' ft'}</button>)}{chosen&&<div className="chosen"><h4>Selected tent</h4><label>Rotation (degrees)<input type="number" value={chosen.rotation} onChange={e=>editTent({rotation:clamp(e.target.value,0,359,0)})}/></label><label>Clearance (feet per side)<input type="number" value={chosen.clearance} onChange={e=>editTent({clearance:clamp(e.target.value,0,200,0)})}/></label><button onClick={()=>editTent({rotation:(chosen.rotation+15)%360})}>Rotate +15°</button><button onClick={()=>{setProject(p=>({...p,tents:p.tents.filter(t=>t.id!==selected)}));setSelected(null);}}>Delete tent</button></div>}</section>
