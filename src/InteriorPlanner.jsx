@@ -113,6 +113,11 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   const [zoom,setZoom]=useState(1);
   const [gridStep,setGridStep]=useState(0.5);
   const [snap,setSnap]=useState(true);
+  const [optimizerOpen,setOptimizerOpen]=useState(false);
+  const [optimizeMode,setOptimizeMode]=useState('replace');
+  const [optimizeTable,setOptimizeTable]=useState('auto');
+  const [optimizeChair,setOptimizeChair]=useState('folding');
+  const [optimizerPreview,setOptimizerPreview]=useState(null);
   const [measureStart,setMeasureStart]=useState(null);
   const [measureHover,setMeasureHover]=useState(null);
   const [viewport,setViewport]=useState({width:800,height:600});
@@ -135,6 +140,9 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   const svgWidth=(w+2*pad)*pixelsPerFoot,svgHeight=(h+2*pad)*pixelsPerFoot;
   const totalChairs=layout.objects.filter(o=>o.type==='chair').length;
   const outOfBounds=layout.objects.filter(o=>exceedsTent(o,w,h));
+  const seatingIdeas=useMemo(()=>optimizerOpen?recommendSeating(layout,h,w,{
+    tableKey:optimizeTable,mode:optimizeMode,chairKey:optimizeChair
+  }):[],[optimizerOpen,tent.interior,h,w,optimizeTable,optimizeMode,optimizeChair]);
   const counts=useMemo(()=>{
     const entries={};
     for(const o of layout.objects){const name=o.label||o.type;entries[name]=(entries[name]||0)+1;}
@@ -143,7 +151,14 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   const grid=[];
   for(let x=0;x<=w && grid.length<500;x+=5)grid.push({axis:'x',v:x});
   for(let y=0;y<=h && grid.length<1000;y+=5)grid.push({axis:'y',v:y});
-  function commit(patch){onChange({...layout,...patch});}
+  function commit(patch){setOptimizerPreview(null);onChange({...layout,...patch});}
+  function applySeatingIdea(idea){
+    if(!idea||!idea.newObjects.length)return;
+    const hasSeating=layout.objects.some(o=>o.type==='chair'||((o.type==='round'||o.type==='table')&&o.catalog!=='cocktail'));
+    if(idea.mode==='replace'&&hasSeating&&!window.confirm('Replace existing tables and chairs? Stages, dance floors, bars, cocktail tables, doors, and walls will be kept.'))return;
+    commit({objects:[...idea.baseObjects,...idea.newObjects]});
+    setSelected(null);setMode('select');
+  }
   function updateObject(id,patch){
     commit({objects:layout.objects.map(o=>o.id===id?{...o,...patch}:o)});
   }
@@ -318,8 +333,52 @@ export default function InteriorPlanner({tent,onChange,onClose}){
         <section><h3>Tools</h3>
           <div className="ip-tool-row"><button className={mode==='select'?'selected':''} onClick={()=>{setMode('select');setMeasureStart(null);}}>Select / move</button><button className={mode==='measure'?'selected':''} onClick={()=>{setMode('measure');setSelected(null);}}>Measure</button></div>
           <label className="ip-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap to grid</label>
-          <label className="ip-field">Grid step <select value={gridStep} onChange={e=>setGridStep(+e.target.value)}><option value=".25">3 in</option><option value=".5">6 in</option><option value="1">1 ft</option></select></label>
+          <label className="ip-field">Grid step <select value={gridStep} onChange={e=>setGridStep(+e.target.value)}>
+            <option value=".25">3 in</option><option value=".5">6 in</option><option value="1">1 ft</option><option value="2">2 ft</option>
+            <option value="3">3 ft</option><option value="4">4 ft</option><option value="5">5 ft</option><option value="10">10 ft</option>
+          </select></label>
           <p className="ip-help">{mode==='measure'?'Click the first point, move for a live distance, then click a second point.':'Drag items to move them. Select an item and drag its gold handle to rotate.'}</p>
+        </section>
+        <section className="ip-optimizer-section"><button type="button" className="ip-section-toggle" onClick={()=>{setOptimizerOpen(v=>!v);setOptimizerPreview(null);}}>
+          <span>Seating Layout Optimizer</span><span>{optimizerOpen?'−':'+'}</span>
+        </button>
+        {optimizerOpen&&<>
+          <p className="ip-help">Compare estimated seating layouts around existing stages, dance floors, doors and other obstacles. These are planning suggestions, not fire-code or occupancy approval.</p>
+          <label className="ip-field">Existing tables and chairs
+            <select value={optimizeMode} onChange={e=>{setOptimizeMode(e.target.value);setOptimizerPreview(null);}}>
+              <option value="replace">Regenerate seating (keep stages, dance floors, etc.)</option>
+              <option value="fill">Fill unused space (keep everything placed)</option>
+            </select>
+          </label>
+          <label className="ip-field">Table style
+            <select value={optimizeTable} onChange={e=>{setOptimizeTable(e.target.value);setOptimizerPreview(null);}}>
+              <option value="auto">Automatically choose the highest seat count</option>
+              {SEATING_TABLE_OPTIONS.map(t=><option key={t.key} value={t.key}>{t.name} — {t.seats} chairs</option>)}
+            </select>
+          </label>
+          <label className="ip-field">Chair style
+            <select value={optimizeChair} onChange={e=>{setOptimizeChair(e.target.value);setOptimizerPreview(null);}}>
+              <option value="folding">Folding chairs</option><option value="chiavari">Chiavari chairs</option>
+            </select>
+          </label>
+          <div className="ip-optimizer-cards">
+            {seatingIdeas.map(idea=><div key={idea.key} className={'ip-opt-card '+(optimizerPreview?.key===idea.key?'ip-opt-active':'')}>
+              <div className="ip-opt-head"><strong>{idea.name}</strong><span>{idea.totalSeats} seats</span></div>
+              <p>{idea.description}</p>
+              <p><strong>{idea.tableCount}</strong> new {idea.tableName} tables • <strong>{idea.newChairs}</strong> new chairs</p>
+              <p>Target between-group gap: <strong>{fmt(idea.aisleEstimate)} ft</strong> (not a verified aisle width)</p>
+              <div className="ip-tool-row">
+                <button onClick={()=>{setOptimizerPreview(idea);setMode('select');setSelected(null);}}>Preview</button>
+                <button className="ip-apply" disabled={!idea.newObjects.length} onClick={()=>applySeatingIdea(idea)}>Apply</button>
+              </div>
+            </div>)}
+          </div>
+          {optimizerPreview&&<div className="ip-opt-preview-note">Preview: {optimizerPreview.name} • {optimizerPreview.totalSeats} planned seats.
+            <button onClick={()=>setOptimizerPreview(null)}>Clear preview</button>
+            <button className="ip-apply" onClick={()=>applySeatingIdea(optimizerPreview)}>Apply preview</button>
+          </div>}
+          <p className="ip-help">Roomy, balanced and maximum use different estimated gaps. Door buffer zones and existing objects are accounted for conservatively, but human circulation, accessibility, tent poles, anchoring, and exit requirements still need review.</p>
+        </>}
         </section>
         <section><h3>Selected item</h3>
           {chosen?<div className="ip-fields">
@@ -391,6 +450,9 @@ export default function InteriorPlanner({tent,onChange,onClose}){
               </g>;
             })}
             {layout.objects.map(item=><ItemShape key={item.id} item={item} selected={selected===item.id} outside={exceedsTent(item,w,h)} press={beginDrag}/>)}
+            {optimizerPreview&&<g pointerEvents="none" opacity=".55" aria-label="Suggested seating preview">
+              {optimizerPreview.newObjects.map(item=><ItemShape key={item.id} item={item} selected={false} outside={exceedsTent(item,w,h)} press={()=>{}}/>)}
+            </g>}
             {layout.measurements.map(m=>measureLine(m.a,m.b,m.id))}
             {measureStart&&measureHover&&measureLine(measureStart,measureHover,'preview',true)}
           </svg>
