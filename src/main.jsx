@@ -4,8 +4,12 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './style.css';
 import InteriorPlanner from './InteriorPlanner.jsx';
+import CloudProjects from './CloudProjects.jsx';
+import {useProjectHistory} from './useProjectHistory.js';
 
 const FEET = 3.280839895;
+// Configure VITE_MAPBOX_PUBLIC_TOKEN once in Appwrite Sites environment variables.
+const PUBLIC_MAPBOX_TOKEN=import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN||'';
 const MAP_STYLES = {
   satellite: 'mapbox://styles/mapbox/satellite-v9',
   hybrid: 'mapbox://styles/mapbox/satellite-streets-v12',
@@ -92,20 +96,30 @@ function totalMeasuredFeet(points,closed){
 }
 function fromStore(key,defaultValue){try{const value=localStorage.getItem(key);return value?JSON.parse(value):defaultValue;}catch{return defaultValue;}}
 function App(){
-  const [project,setProject]=useState(()=>fromStore('uds-project',{name:'New site plan',center:[-90.1994,38.627],zoom:17,tents:[]}));
+  const {project,setProject,loadProject,undo,redo,canUndo,canRedo}=useProjectHistory(()=>
+    fromStore('uds-project',{name:'New site plan',center:[-90.1994,38.627],zoom:17,tents:[],measurement:{points:[],closed:false}})
+  );
   const [tokenText,setTokenText]=useState(()=>localStorage.getItem('uds-mapbox-token')||'');
   const [token,setToken]=useState(()=>{
-    try{const saved=localStorage.getItem('uds-mapbox-token')||'';return saved.startsWith('pk.')?saved:'';}catch{return '';}
+    try{return PUBLIC_MAPBOX_TOKEN||(localStorage.getItem('uds-mapbox-token')||'');}catch{return PUBLIC_MAPBOX_TOKEN;}
   });
   const [mapStyle,setMapStyle]=useState('satellite');
-  const [status,setStatus]=useState('Enter a Mapbox public token to begin.');
+  const [status,setStatus]=useState(PUBLIC_MAPBOX_TOKEN?'Loading satellite imagery…':'Add the Mapbox token once to the Appwrite site environment to enable every device.');
   const [imageryAccess,setImageryAccess]=useState('unknown');
   const [address,setAddress]=useState('');
   const [matches,setMatches]=useState([]);
   const [tool,setTool]=useState('select');
-  const [points,setPoints]=useState([]);
+  const points=Array.isArray(project.measurement?.points)?project.measurement.points:[];
+  const measureClosed=Boolean(project.measurement?.closed);
+  const setPoints=update=>setProject(prev=>{
+    const current=Array.isArray(prev.measurement?.points)?prev.measurement.points:[];
+    return {...prev,measurement:{...(prev.measurement||{}),points:typeof update==='function'?update(current):update}};
+  },{group:'measurement'});
+  const setMeasureClosed=update=>setProject(prev=>{
+    const current=Boolean(prev.measurement?.closed);
+    return {...prev,measurement:{...(prev.measurement||{}),closed:typeof update==='function'?update(current):update}};
+  },{group:'measurement'});
   const [measureCursor,setMeasureCursor]=useState(null);
-  const [measureClosed,setMeasureClosed]=useState(false);
   const [nearStart,setNearStart]=useState(false);
   const [selected,setSelected]=useState(null);
   const [interiorId,setInteriorId]=useState(null);
@@ -272,7 +286,7 @@ function App(){
       if(drag.current){
         const d=drag.current;
         const lng=d.lng+e.lngLat.lng-d.start[0],lat=d.lat+e.lngLat.lat-d.start[1];
-        setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===d.id?{...t,lng,lat}:t)}));
+        setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===d.id?{...t,lng,lat}:t)}),{group:'map-drag'});
         return;
       }
       const st=live.current;
@@ -284,7 +298,7 @@ function App(){
     });
     function endDrag(){if(drag.current){drag.current=null;m.dragPan.enable();}}
     m.on('mouseup',endDrag);m.on('mouseout',()=>{endDrag();setMeasureCursor(null);setNearStart(false);});
-    m.on('moveend',()=>{const c=m.getCenter();setProject(p=>({...p,center:[c.lng,c.lat],zoom:m.getZoom()}));});
+    m.on('moveend',()=>{const c=m.getCenter();setProject(p=>({...p,center:[c.lng,c.lat],zoom:m.getZoom()}),{record:false,group:'camera'});});
     // Refresh sources when React state changes (see next effect).
     m.__udsSync=sync;
     return ()=>{ready.current=false;mapRef.current=null;m.remove();};
@@ -417,7 +431,7 @@ function App(){
   }
   return <div className="layout">
     <aside className="sidebar">
-      <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.7</small></div></div>
+      <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.8</small></div></div>
       <div className="quick-actions"><button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button></div>
       <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
       <section><h3>Tools</h3>
