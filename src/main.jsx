@@ -115,6 +115,7 @@ function App(){
   const [logisticsDraft,setLogisticsDraft]=useState(null);
   const [logisticsHover,setLogisticsHover]=useState(null);
   const [logisticsSelected,setLogisticsSelected]=useState(null);
+  const [logisticsJump,setLogisticsJump]=useState(0);
   const points=Array.isArray(project.measurement?.points)?project.measurement.points:[];
   const measureClosed=Boolean(project.measurement?.closed);
   const setPoints=update=>setProject(prev=>{
@@ -136,7 +137,7 @@ function App(){
   const [clearanceDraft,setClearanceDraft]=useState('4');
   const [width,setWidth]=useState('20'),[length,setLength]=useState('40'),[rotation,setRotation]=useState('0'),[clearance,setClearance]=useState('4');
   const mapDiv=useRef(null),mapRef=useRef(null),ready=useRef(false),drag=useRef(null),live=useRef({});
-  const addSectionRef=useRef(null),editorRef=useRef(null);
+  const addSectionRef=useRef(null),editorRef=useRef(null),logisticsPanelRef=useRef(null);
   const tents=Array.isArray(project.tents)?project.tents:[];
   const logistics=Array.isArray(project.logistics)?project.logistics:[];
   const chosen=tents.find(t=>t.id===selected);
@@ -589,7 +590,13 @@ function App(){
     <aside className="sidebar">
       <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V1.0</small></div></div>
       <div className="quick-actions">
-        <button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button>
+        <div className="quick-navigation">
+          <button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button>
+          <button disabled={!token} onClick={()=>{
+            setLogisticsJump(v=>v+1);
+            requestAnimationFrame(()=>logisticsPanelRef.current?.scrollIntoView({block:'start',behavior:'smooth'}));
+          }}>Parking & routes</button>
+        </div>
         <div className="history-controls">
           <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl/⌘+Z)">↶ Undo</button>
           <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl/⌘+Shift+Z)">↷ Redo</button>
@@ -597,11 +604,13 @@ function App(){
       </div>
       <CloudProjects project={project} measurement={{points,closed:measureClosed}} onLoadProject={loadCloudProject}/>
       <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><p className="hint">To open the map automatically on every computer, set <code>VITE_MAPBOX_PUBLIC_TOKEN</code> once in Appwrite Sites → Settings → Environment variables, then redeploy. This manual entry is a temporary fallback.</p><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
-      <SiteLogisticsPanel items={logistics} draft={logisticsDraft} selected={logisticsSelected}
+      <div ref={logisticsPanelRef} className="site-logistics-anchor">
+      <SiteLogisticsPanel jumpToken={logisticsJump} items={logistics} draft={logisticsDraft} selected={logisticsSelected}
         onSelect={id=>{setLogisticsSelected(id);setSelected(null);setTool('select');}}
         onStart={startLogistics} onFinish={finishLogistics} onCancel={cancelLogistics}
         onBack={()=>setLogisticsDraft(d=>d?{...d,points:d.points.slice(0,-1)}:d)}
         onChange={updateLogistics} onRemove={removeLogistics} onZoom={zoomToLogistics}/>
+      </div>
       <section><h3>Tools</h3>
         <div className="grid">
           <button className={tool==='select'?'active':''} disabled={!token} onClick={()=>{setTool('select');setPendingTent(null);setMeasureCursor(null);setLogisticsDraft(null);setLogisticsHover(null);}}>Select / drag</button>
