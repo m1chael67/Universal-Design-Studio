@@ -118,6 +118,10 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   const w=Number(tent.length)||40,h=Number(tent.width)||20;
   const layout=landscape(tent.interior,h);
   const [selected,setSelected]=useState(null);
+  const [selectedIds,setSelectedIds]=useState([]);
+  const [marquee,setMarquee]=useState(null);
+  const [panels,setPanels]=useState({catalog:true,access:false,tools:false,annotations:false,counts:false});
+  const panelRef=useRef(null);
   const [mode,setMode]=useState('select');
   const [zoom,setZoom]=useState(1);
   const [gridStep,setGridStep]=useState(0.5);
@@ -141,11 +145,16 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     resize();const obs=typeof ResizeObserver!=='undefined'?new ResizeObserver(resize):null;obs?.observe(el);
     return ()=>obs?.disconnect();
   },[]);
-  useEffect(()=>{setSelected(null);setMode('select');setMeasureStart(null);setZoom(1);},[tent.id]);
+  useEffect(()=>{
+    setSelected(null);setSelectedIds([]);setMode('select');setMeasureStart(null);setZoom(1);
+    setMarquee(null);setOptimizerPreview(null);
+  },[tent.id]);
+  useEffect(()=>{if(selected||selectedIds.length)panelRef.current?.scrollTo({top:0,behavior:'smooth'});},[selected,selectedIds.join(',')]);
   useEffect(()=>{
     if(tent.interior?.orientation!=='landscape-v1')onChange(landscape(tent.interior,Number(tent.width)||20));
   },[tent.id,tent.interior?.orientation]);
   const chosen=layout.objects.find(o=>o.id===selected);
+  const selectedMeasurement=layout.measurements.find(m=>'measure:'+m.id===selected);
   const alignmentGuide=chosen?(()=>{
     const angle=((chosen.rot||0)%360+360)%360;
     const candidates=[{angle:0,source:'Tent walls'},{angle:90,source:'Tent walls'},
@@ -160,6 +169,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     return hit?{angle,source:hit.source}:null;
   })():null;
   const chosenDoor=layout.doors.find(o=>'door:'+o.id===selected);
+  const selectedObjects=layout.objects.filter(o=>selectedIds.includes(o.id));
   const pad=3.5;
   const fit=Math.max(2,Math.min((viewport.width-50)/(w+2*pad),(viewport.height-48)/(h+2*pad)));
   const pixelsPerFoot=fit*zoom;
@@ -184,7 +194,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     const hasSeating=layout.objects.some(o=>o.type==='chair'||((o.type==='round'||o.type==='table')&&o.catalog!=='cocktail'));
     if(idea.mode==='replace'&&hasSeating&&!window.confirm('Replace existing tables and chairs? Stages, dance floors, bars, cocktail tables, doors, and walls will be kept.'))return;
     commit({objects:[...idea.baseObjects,...idea.newObjects]});
-    setSelected(null);setMode('select');
+    setSelected(null);setSelectedIds([]);setMode('select');setOptimizerOpen(false);
   }
   function updateObject(id,patch){
     commit({objects:layout.objects.map(o=>o.id===id?{...o,...patch}:o)});
@@ -211,29 +221,42 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   function updateDoor(id,patch){
     commit({doors:layout.doors.map(d=>d.id===id?{...d,...patch}:d)});
   }
+  function selectEntity(id){
+    setSelected(id);setSelectedIds(id&&!id.startsWith('door:')&&!id.startsWith('measure:')?[id]:[]);
+    setMode('select');
+  }
   function addObject(cat){
     const n=layout.objects.length;
     const obj={id:uid(),catalog:cat.key,type:cat.type,label:cat.title,x:cap(w/2+(n%4)*.75,0,w),
       y:cap(h/2+(n%3)*.75,0,h),w:cat.w,h:cat.h,rot:0};
     commit({objects:[...layout.objects,obj]});
-    setSelected(obj.id);setMode('select');
+    selectEntity(obj.id);setPanels(p=>({...p,catalog:false}));
   }
   function addDoor(){
     const wall='top',d={id:uid(),wall,at:w/2,width:Math.min(4,Math.max(1,w/2))};
     commit({doors:[...layout.doors,d],sidewalls:{...layout.sidewalls,top:true}});
-    setSelected('door:'+d.id);setMode('select');
+    selectEntity('door:'+d.id);setPanels(p=>({...p,access:false}));
   }
   function removeSelected(){
-    if(!selected)return;
-    if(!window.confirm('Remove the selected item from this tent layout?'))return;
-    if(selected.startsWith('door:'))commit({doors:layout.doors.filter(d=>'door:'+d.id!==selected)});
-    else commit({objects:layout.objects.filter(o=>o.id!==selected)});
-    setSelected(null);
+    if(!selected&&!selectedIds.length)return;
+    const count=selectedIds.length||1;
+    if(!window.confirm('Remove '+count+' selected item'+(count===1?'':'s')+' from this tent layout?'))return;
+    if(selected?.startsWith('door:'))commit({doors:layout.doors.filter(d=>'door:'+d.id!==selected)});
+    else if(selected?.startsWith('measure:'))commit({measurements:layout.measurements.filter(m=>'measure:'+m.id!==selected)});
+    else commit({objects:layout.objects.filter(o=>!selectedIds.includes(o.id)&&o.id!==selected)});
+    setSelected(null);setSelectedIds([]);
+  }
+  function clearMeasurements(){
+    if(!layout.measurements.length||!window.confirm('Delete all '+layout.measurements.length+' interior measurements?'))return;
+    commit({measurements:[]});setSelected(null);setSelectedIds([]);
+  }
+  function updateMeasurement(id,patch){
+    commit({measurements:layout.measurements.map(m=>m.id===id?{...m,...patch}:m)});
   }
   function duplicateSelected(){
     if(!chosen)return;
     const o={...chosen,id:uid(),x:cap(chosen.x+2,0,w),y:cap(chosen.y+2,0,h)};
-    commit({objects:[...layout.objects,o]});setSelected(o.id);
+    commit({objects:[...layout.objects,o]});selectEntity(o.id);
   }
   function seatingCount(o){
     if(!o||!['round','table'].includes(o.type)||['cocktail','buffet'].includes(o.catalog))return 0;
