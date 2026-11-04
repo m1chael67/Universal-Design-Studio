@@ -333,6 +333,17 @@ function App(){
     setStatus('Tent added. Select it to drag or adjust its rotation.');
   }
   function cancelTent(){setPendingTent(null);setTool('select');}
+  function toggleTentFlag(id,flag){
+    setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===id?{...t,[flag]:!t[flag]}:t)}));
+  }
+  function duplicateTent(t){
+    if(!t)return;
+    const offset=18/(111319.49*Math.max(.1,Math.cos(radians(t.lat))));
+    const copy={...t,id:crypto.randomUUID(),lng:t.lng+offset,name:t.name?.trim()?t.name.trim()+' copy':''};
+    setProject(p=>({...p,tents:[...(p.tents||[]),copy]}));
+    setSelected(copy.id);setTool('select');
+    setStatus('Tent duplicated. Drag the new layer to the correct position.');
+  }
   function deleteTent(t){
     if(!window.confirm('Delete this '+t.width+' × '+t.length+' ft tent from the site plan?'))return;
     setProject(p=>({...p,tents:(p.tents||[]).filter(item=>item.id!==t.id)}));
@@ -422,20 +433,48 @@ function App(){
           <p className="hint">Side labels show feet to two decimals. Repeated side lengths within 0.03 ft are labeled only once.</p>
         </div>}
       </section>
-      <section ref={addSectionRef} className="add-tent-section"><h3>New tent settings</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Place a new tent</button>{tool==='place'&&<div className="placement-controls"><strong>Placement mode is active</strong><p>Click once on the map to add your tent. You'll immediately be able to edit its layer.</p><button onClick={cancelTent}>Cancel placement</button></div>}</section>
-      <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><div key={t.id} className="tent-list-row"><button className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setTool('select');setPendingTent(null);setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+' × '+t.length+' ft'}</button><button className="tent-remove" aria-label={'Delete tent '+(i+1)} title="Delete tent" onClick={()=>deleteTent(t)}>×</button></div>)}{chosen&&<div className="chosen"><h4>Edit selected tent</h4>
-            <div className="grid">
-              <label>Width (ft)<input type="number" min="1" max="2000" value={widthDraft} onChange={e=>changeSelectedDimension('width',e.target.value)} onBlur={()=>finishSelectedDimension('width',widthDraft)}/></label>
-              <label>Length (ft)<input type="number" min="1" max="2000" value={lengthDraft} onChange={e=>changeSelectedDimension('length',e.target.value)} onBlur={()=>finishSelectedDimension('length',lengthDraft)}/></label>
-            </div>
-            <RotationDial angle={chosen.rotation} onChange={value=>{editTent({rotation:value});setRotationDraft(String(value));}}/>
-            <div className="grid">
-              <label>Rotation (°)<input type="number" min="0" max="359" value={rotationDraft} onChange={e=>changeSelectedDimension('rotation',e.target.value)} onBlur={()=>finishSelectedDimension('rotation',rotationDraft)}/></label>
-              <label>Clearance (ft per side)<input type="number" min="0" max="200" step="0.01" value={clearanceDraft} onChange={e=>changeSelectedDimension('clearance',e.target.value)} onBlur={()=>finishSelectedDimension('clearance',clearanceDraft)}/></label>
-            </div>
-            <p className="hint">All four values update the tent outline as you type. Clearance is the dashed outer boundary.</p>
+      <section className="layer-section">
+        <h3>Layers — Tents ({tents.length})</h3>
+        {tents.length===0&&<p className="hint">No tents yet. Use + Add tent, then click the map once.</p>}
+        {tents.map((t,i)=><div key={t.id} className={'tent-list-row '+(selected===t.id?'selected-row':'')+(t.hidden?' hidden-layer':'')}>
+          <button type="button" className={'listitem layer-tab '+(selected===t.id?'active':'')} aria-pressed={selected===t.id}
+            onClick={()=>{
+              setTool('select');setSelected(t.id);setPendingTent(null);
+              mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});
+              requestAnimationFrame(()=>editorRef.current?.scrollIntoView({block:'nearest',behavior:'smooth'}));
+            }}>
+            <span className="layer-title">{t.name?.trim()||'Tent '+(i+1)}</span>
+            <small>{t.width} × {t.length} ft{t.hidden?' · Hidden':''}{t.locked?' · Position locked':''}</small>
+          </button>
+          <button type="button" className="layer-tool" title={t.hidden?'Show tent':'Hide tent'} aria-label={t.hidden?'Show tent '+(i+1):'Hide tent '+(i+1)}
+            onClick={()=>toggleTentFlag(t.id,'hidden')}>{t.hidden?'◌':'◉'}</button>
+          <button type="button" className="layer-tool" title={t.locked?'Unlock position':'Lock position'} aria-label={t.locked?'Unlock tent '+(i+1):'Lock tent '+(i+1)}
+            onClick={()=>toggleTentFlag(t.id,'locked')}>{t.locked?'🔒':'🔓'}</button>
+          <button type="button" className="tent-remove" aria-label={'Delete tent '+(i+1)} title="Delete tent"
+            onClick={()=>deleteTent(t)}>×</button>
+        </div>)}
+        {chosen&&<div className="chosen layer-editor" ref={editorRef}>
+          <h4><span className="active-indicator"/>Editing: {chosen.name?.trim()||'Tent '+(tents.findIndex(t=>t.id===chosen.id)+1)}</h4>
+          <label>Layer name<input type="text" value={chosen.name||''} onChange={e=>editTent({name:e.target.value})} placeholder="e.g. Ceremony tent" maxLength={65}/></label>
+          {chosen.hidden&&<p className="editing-note">This layer is hidden. Use the ◌ control beside its name to show it.</p>}
+          {chosen.locked&&<p className="editing-note">Position locked. Unlock using the 🔒 control beside its name before dragging.</p>}
+          <div className="grid">
+            <label>Width (ft)<input type="number" min="1" max="2000" value={widthDraft} onChange={e=>changeSelectedDimension('width',e.target.value)} onBlur={()=>finishSelectedDimension('width',widthDraft)}/></label>
+            <label>Length (ft)<input type="number" min="1" max="2000" value={lengthDraft} onChange={e=>changeSelectedDimension('length',e.target.value)} onBlur={()=>finishSelectedDimension('length',lengthDraft)}/></label>
+          </div>
+          <RotationDial angle={chosen.rotation} onChange={value=>{editTent({rotation:value});setRotationDraft(String(value));}}/>
+          <div className="grid">
+            <label>Rotation (°)<input type="number" min="0" max="359" value={rotationDraft} onChange={e=>changeSelectedDimension('rotation',e.target.value)} onBlur={()=>finishSelectedDimension('rotation',rotationDraft)}/></label>
+            <label>Clearance (ft per side)<input type="number" min="0" max="200" step="0.01" value={clearanceDraft} onChange={e=>changeSelectedDimension('clearance',e.target.value)} onBlur={()=>finishSelectedDimension('clearance',clearanceDraft)}/></label>
+          </div>
+          <p className="hint">Changes update this highlighted tent directly. The dashed perimeter represents the additional clearance.</p>
+          <div className="grid">
             <button onClick={()=>{const angle=(chosen.rotation+15)%360;editTent({rotation:angle});setRotationDraft(String(angle));}}>Rotate +15°</button>
-          </div>}</section>
+            <button onClick={()=>duplicateTent(chosen)}>Duplicate tent</button>
+          </div>
+        </div>}
+      </section>
+      <section ref={addSectionRef} className="add-tent-section"><h3>New tent settings</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Place a new tent</button>{tool==='place'&&<div className="placement-controls"><strong>Placement mode is active</strong><p>Click once on the map to add your tent. You'll immediately be able to edit its layer.</p><button onClick={cancelTent}>Cancel placement</button></div>}</section>
       <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Save editable project (.json)</button><label className="filebutton">Open editable project (.json)<input type="file" accept=".json" onChange={importFile}/></label><div className="grid image-exports"><button disabled={!token} onClick={()=>exportImage('png')}>Export PNG</button><button disabled={!token} onClick={()=>exportImage('jpg')}>Export JPG</button></div><p className="hint">JSON saves editable tent geometry for reopening. PNG/JPG are flat pictures of the map. Projects are saved in this browser; Appwrite cloud saving comes later.</p></section>
     </aside>
     <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">'Click on the map to place your tent. Press Cancel placement to exit.'</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
