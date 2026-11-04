@@ -327,7 +327,7 @@ function App(){
         if(kind==='pin'||(current.shape==='circle'&&current.points.length===1)){
           const finished={...current,points:[...current.points,point]};
           setProject(p=>({...p,logistics:[...(p.logistics||[]).filter(x=>x.id!==finished.id),finished]}));
-          setLogisticsSelected(finished.id);setLogisticsDraft(null);setLogisticsHover(null);setTool('select');
+          setLogisticsSelected(null);setLogisticsDraft(null);setLogisticsHover(null);setTool('select');
           setStatus('Site mark saved. Select it below to edit notes or redraw.');
           return;
         }
@@ -336,7 +336,7 @@ function App(){
           if(Math.hypot(first.x-e.point.x,first.y-e.point.y)<17){
             const finished={...current};
             setProject(p=>({...p,logistics:[...(p.logistics||[]).filter(x=>x.id!==finished.id),finished]}));
-            setLogisticsSelected(finished.id);setLogisticsDraft(null);setLogisticsHover(null);setTool('select');
+            setLogisticsSelected(null);setLogisticsDraft(null);setLogisticsHover(null);setTool('select');
             setStatus('Site zone saved.');
             return;
           }
@@ -505,7 +505,7 @@ function App(){
     }
     const completed={...logisticsDraft,points:logisticsDraft.points.slice(0,150)};
     setProject(p=>({...p,logistics:[...(p.logistics||[]).filter(t=>t.id!==completed.id),completed]}));
-    setLogisticsDraft(null);setLogisticsHover(null);setLogisticsSelected(completed.id);
+    setLogisticsDraft(null);setLogisticsHover(null);setLogisticsSelected(null);
     setTool('select');setStatus(completed.label+' saved to the project.');
   }
   function cancelLogistics(){setLogisticsDraft(null);setLogisticsHover(null);setTool('select');}
