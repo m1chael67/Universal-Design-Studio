@@ -111,6 +111,10 @@ function addWestCoastStructure(root,{length,width,eave,roofMode,frameVisible}){
   }
   // End spreaders close the rectangular eave perimeter.
   for(const x of [a,b])post(root,[x,eave,-d],[x,eave,d],.085);
+  if(width>=19.5)for(const x of [a,b]){
+    post(root,[x,0,0],[x,eave,0],.085);
+    cube(root,.48,.07,.48,x,.035,0,STEEL);
+  }
   if(p.right>p.left+.01)post(root,[p.left,p.ridge,0],[p.right,p.ridge,0],.09);
   // Four long diagonal hip rafters (not gable triangles).
   for(const x of [a,b])for(const z of [-d,d]){
