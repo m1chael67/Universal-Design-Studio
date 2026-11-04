@@ -1,0 +1,138 @@
+import React, {useEffect, useRef, useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import './style.css';
+
+const FEET = 3.280839895;
+const radians = deg => deg * Math.PI / 180;
+const clamp = (v,min,max,fallback) => Number.isFinite(+v) ? Math.max(min,Math.min(max,+v)) : fallback;
+const distance = (a,b) => {
+  const R=6371008.8, dLat=radians(b[1]-a[1]), dLon=radians(b[0]-a[0]);
+  const h=Math.sin(dLat/2)**2+Math.cos(radians(a[1]))*Math.cos(radians(b[1]))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(h)))*FEET;
+};
+function corners(t,extra=0){
+  const x=(t.width/2+extra)/FEET, y=(t.length/2+extra)/FEET, angle=radians(t.rotation);
+  return [[-x,-y],[x,-y],[x,y],[-x,y],[-x,-y]].map(([east,north])=>{
+    const e=east*Math.cos(angle)+north*Math.sin(angle), n=-east*Math.sin(angle)+north*Math.cos(angle);
+    return [t.lng+e/(111319.49*Math.max(.1,Math.cos(radians(t.lat)))),t.lat+n/111132.92];
+  });
+}
+const fc = features => ({type:'FeatureCollection',features});
+const polygonLayer = (tents,clearance=false) => fc(tents.map(t=>({type:'Feature',properties:{id:t.id,label:t.width+' × '+t.length+' ft'},geometry:{type:'Polygon',coordinates:[corners(t,clearance?t.clearance:0)]}})));
+const measureLayer = points => fc(points.length===2?[{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:points}}]:[]);
+function fromStore(key,defaultValue){try{const value=localStorage.getItem(key);return value?JSON.parse(value):defaultValue;}catch{return defaultValue;}}
+function App(){
+  const [project,setProject]=useState(()=>fromStore('uds-project',{name:'New site plan',center:[-90.1994,38.627],zoom:17,tents:[]}));
+  const [tokenText,setTokenText]=useState(()=>localStorage.getItem('uds-mapbox-token')||'');
+  const [token,setToken]=useState('');
+  const [status,setStatus]=useState('Enter a Mapbox public token to begin.');
+  const [address,setAddress]=useState('');
+  const [matches,setMatches]=useState([]);
+  const [tool,setTool]=useState('select');
+  const [points,setPoints]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [width,setWidth]=useState(40),[length,setLength]=useState(80),[rotation,setRotation]=useState(0),[clearance,setClearance]=useState(10);
+  const mapDiv=useRef(null),mapRef=useRef(null),ready=useRef(false),drag=useRef(null),live=useRef({});
+  const tents=Array.isArray(project.tents)?project.tents:[];
+  live.current={tool,tents,points,selected,width,length,rotation,clearance};
+  useEffect(()=>{try{localStorage.setItem('uds-project',JSON.stringify(project));}catch{}},[project]);
+  useEffect(()=>{
+    if(!token||!mapDiv.current)return;
+    mapboxgl.accessToken=token;
+    let m;
+    try{m=new mapboxgl.Map({container:mapDiv.current,style:'mapbox://styles/mapbox/satellite-streets-v12',center:project.center||[-90.1994,38.627],zoom:project.zoom||17});
+    }catch(err){setStatus('Map failed: '+err.message);return;}
+    mapRef.current=m;ready.current=false;setStatus('Loading satellite imagery…');
+    m.addControl(new mapboxgl.NavigationControl(),'top-right');
+    m.on('error',ev=>{if(ev.error?.message){setStatus('Map error: '+ev.error.message);}});
+    m.on('load',()=>{
+      ready.current=true;
+      m.addSource('clearance',{type:'geojson',data:fc([])});
+      m.addSource('tents',{type:'geojson',data:fc([])});
+      m.addSource('measure',{type:'geojson',data:fc([])});
+      m.addLayer({id:'clearance-fill',source:'clearance',type:'fill',paint:{'fill-color':'#ffc46b','fill-opacity':.15}});
+      m.addLayer({id:'clearance-line',source:'clearance',type:'line',paint:{'line-color':'#ffc46b','line-width':2,'line-dasharray':[3,2]}});
+      m.addLayer({id:'tent-fill',source:'tents',type:'fill',paint:{'fill-color':'#46dccb','fill-opacity':.38}});
+      m.addLayer({id:'tent-outline',source:'tents',type:'line',paint:{'line-color':'#d8fff9','line-width':3}});
+      m.addLayer({id:'measure-line',source:'measure',type:'line',paint:{'line-color':'#ffffff','line-width':3,'line-dasharray':[2,1]}});
+      sync();setStatus('Satellite map ready');
+    });
+    function sync(){
+      if(!ready.current)return;
+      const current=live.current;
+      m.getSource('tents')?.setData(polygonLayer(current.tents));
+      m.getSource('clearance')?.setData(polygonLayer(current.tents,true));
+      m.getSource('measure')?.setData(measureLayer(current.points));
+    }
+    m.on('click',e=>{
+      if(drag.current)return;
+      const st=live.current;
+      if(st.tool==='measure'){setPoints(p=>p.length>=2?[e.lngLat.toArray()]:[...p,e.lngLat.toArray()]);return;}
+      if(st.tool==='place'){
+        const t={id:crypto.randomUUID(),lng:e.lngLat.lng,lat:e.lngLat.lat,width:clamp(st.width,1,2000,40),length:clamp(st.length,1,2000,80),rotation:clamp(st.rotation,0,359,0),clearance:clamp(st.clearance,0,200,10)};
+        setProject(p=>({...p,tents:[...(p.tents||[]),t]}));setSelected(t.id);setTool('select');return;
+      }
+      const hit=m.queryRenderedFeatures(e.point,{layers:['tent-fill']})[0];
+      setSelected(hit?.properties?.id||null);
+    });
+    m.on('mousedown','tent-fill',e=>{
+      if(live.current.tool!=='select')return;
+      const id=e.features?.[0]?.properties?.id,t=live.current.tents.find(t=>t.id===id);
+      if(!t)return;
+      drag.current={id,start:e.lngLat.toArray(),lng:t.lng,lat:t.lat};
+      setSelected(id);m.dragPan.disable();
+    });
+    m.on('mousemove',e=>{
+      if(!drag.current)return;
+      const d=drag.current;
+      const lng=d.lng+e.lngLat.lng-d.start[0],lat=d.lat+e.lngLat.lat-d.start[1];
+      setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===d.id?{...t,lng,lat}:t)}));
+    });
+    function endDrag(){if(drag.current){drag.current=null;m.dragPan.enable();}}
+    m.on('mouseup',endDrag);m.on('mouseout',endDrag);
+    m.on('moveend',()=>{const c=m.getCenter();setProject(p=>({...p,center:[c.lng,c.lat],zoom:m.getZoom()}));});
+    // Refresh sources when React state changes (see next effect).
+    m.__udsSync=sync;
+    return ()=>{ready.current=false;mapRef.current=null;m.remove();};
+  },[token]);
+  useEffect(()=>{mapRef.current?.__udsSync?.();},[project.tents,points,selected,tool]);
+  function startMap(){if(!tokenText.trim().startsWith('pk.')){setStatus('Enter your public Mapbox token (starts with pk.).');return;}localStorage.setItem('uds-mapbox-token',tokenText.trim());setToken(tokenText.trim());}
+  async function search(e){
+    e.preventDefault();if(!token||!address.trim())return;
+    try{
+      const url='https://api.mapbox.com/search/geocode/v6/forward?q='+encodeURIComponent(address)+'&country=us&limit=5&access_token='+encodeURIComponent(token);
+      const r=await fetch(url);if(!r.ok)throw Error('Search returned '+r.status);
+      const data=await r.json();setMatches((data.features||[]).map(f=>({name:f.properties?.full_address||f.properties?.name||'Location',coords:f.geometry.coordinates})));
+    }catch(err){setStatus('Address search failed: '+err.message);}
+  }
+  function editTent(patch){setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===selected?{...t,...patch}:t)}));}
+  function exportFile(){
+    const blob=new Blob([JSON.stringify({...project,format:'uds-v0.1'},null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='universal-design-site-plan.json';a.click();URL.revokeObjectURL(url);
+  }
+  async function importFile(e){
+    const file=e.target.files?.[0];e.target.value='';if(!file)return;
+    try{
+      if(file.size>1000000)throw Error('File too large');
+      const p=JSON.parse(await file.text());if(p.format!=='uds-v0.1'||!Array.isArray(p.tents))throw Error('Not a Universal Design Studio project');
+      const valid=p.tents.filter(t=>Number.isFinite(t.lng)&&Number.isFinite(t.lat)&&t.width>0&&t.length>0).slice(0,150);
+      setProject({name:String(p.name||'Imported plan'),center:p.center||[-90.1994,38.627],zoom:p.zoom||17,tents:valid});
+      setSelected(null);setPoints([]);if(p.center)mapRef.current?.jumpTo({center:p.center,zoom:p.zoom||17});
+    }catch(err){setStatus('Import failed: '+err.message);}
+  }
+  const chosen=tents.find(t=>t.id===selected);
+  return <div className="layout">
+    <aside className="sidebar">
+      <div className="brand"><span className="mark">U</span><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.1</small></div></div>
+      <section><h3>Satellite map</h3>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p></section>
+      <section><h3>Tools</h3><div className="grid">{[['select','Select / drag'],['place','Place tent'],['measure','Measure']].map(([id,label])=><button key={id} className={tool===id?'active':''} disabled={!token} onClick={()=>{setTool(id);if(id==='measure')setPoints([]);}}>{label}</button>)}</div><p className="hint">{tool==='measure'?'Click two points on the map to measure a distance.':tool==='place'?'Click on the satellite map to position a tent.':'Click to select a tent; drag it to reposition.'}</p>{points.length===2&&<div className="measurement">Distance: {distance(points[0],points[1]).toFixed(1)} ft</div>}</section>
+      <section><h3>New tent</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(+e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(+e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(+e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(+e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={()=>setTool('place')}>Place {width} × {length} tent</button></section>
+      <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><button key={t.id} className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+'×'+t.length+' ft'}</button>)}{chosen&&<div className="chosen"><h4>Selected tent</h4><label>Rotation (degrees)<input type="number" value={chosen.rotation} onChange={e=>editTent({rotation:clamp(e.target.value,0,359,0)})}/></label><label>Clearance (feet per side)<input type="number" value={chosen.clearance} onChange={e=>editTent({clearance:clamp(e.target.value,0,200,0)})}/></label><button onClick={()=>editTent({rotation:(chosen.rotation+15)%360})}>Rotate +15°</button><button onClick={()=>{setProject(p=>({...p,tents:p.tents.filter(t=>t.id!==selected)}));setSelected(null);}}>Delete tent</button></div>}</section>
+      <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Export project JSON</button><label className="filebutton">Import project JSON<input type="file" accept=".json" onChange={importFile}/></label><p className="hint">Saved in this browser only. Appwrite cloud storage comes later.</p></section>
+    </aside>
+    <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
+  </div>;
+}
+createRoot(document.getElementById('root')).render(<App/>);
