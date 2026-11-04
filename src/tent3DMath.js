@@ -47,3 +47,27 @@ export function objectPosition(o,length,width){
     z:clamp(finite(o.y,width/2),-30,width+30)-width/2,
     rotation:finite(o.rot)*Math.PI/180};
 }
+
+export function sitePlacements(tents){
+  const valid=(Array.isArray(tents)?tents:[]).filter(t=>
+    Number.isFinite(Number(t.lng))&&Number.isFinite(Number(t.lat))&&
+    Math.abs(Number(t.lat))<=85&&Math.abs(Number(t.lng))<=180
+  ).slice(0,75);
+  if(!valid.length)return [];
+  const originLng=valid.reduce((n,t)=>n+Number(t.lng),0)/valid.length;
+  const originLat=valid.reduce((n,t)=>n+Number(t.lat),0)/valid.length;
+  const cos=Math.max(.1,Math.cos(originLat*Math.PI/180));
+  return valid.map(t=>{
+    const x=clamp((Number(t.lng)-originLng)*111319.49*3.280839895*cos,-10000,10000);
+    const z=clamp(-(Number(t.lat)-originLat)*111132.92*3.280839895,-10000,10000);
+    const theta=(90-finite(t.rotation))*Math.PI/180;
+    return {tent:t,x,z,theta};
+  });
+}
+export function siteRadius(tents){
+  const placements=sitePlacements(tents);
+  return Math.max(20,...placements.map(p=>{
+    const {length,width}=tentDimensions(p.tent);
+    return Math.hypot(p.x,p.z)+Math.hypot(length,width)/2;
+  }));
+}
