@@ -423,9 +423,11 @@ function App(){
   function loadCloudProject(payload){
     if(!Array.isArray(payload?.tents))return;
     const next={name:String(payload.name||'Cloud site plan'),center:Array.isArray(payload.center)?payload.center:[-90.1994,38.627],
-      zoom:payload.zoom||17,tents:payload.tents,measurement:payload.measurement||{points:[],closed:false}};
+      zoom:payload.zoom||17,tents:payload.tents,logistics:Array.isArray(payload.logistics)?payload.logistics:[],
+      measurement:payload.measurement||{points:[],closed:false}};
     loadProject(next);
     setSelected(null);setInteriorId(null);setTool('select');setPendingTent(null);
+    setLogisticsDraft(null);setLogisticsHover(null);setLogisticsSelected(null);
     setMeasureCursor(null);setNearStart(false);
     if(Array.isArray(next.center)&&mapRef.current)mapRef.current.jumpTo({center:next.center,zoom:next.zoom});
     setStatus('Cloud project opened: '+next.name);
@@ -450,6 +452,7 @@ function App(){
     setters[field](String(n));
   }
   function beginAddTent(){
+    setLogisticsDraft(null);setLogisticsHover(null);
     setTool('place');setPendingTent(null);setMeasureCursor(null);
     // Keep the Add Tent panel reachable even when the selected-tent editor is expanded.
     addSectionRef.current?.scrollIntoView({block:'start',behavior:'smooth'});
@@ -472,6 +475,44 @@ function App(){
     setProject(p=>({...p,tents:[...(p.tents||[]),copy]}));
     setSelected(copy.id);setTool('select');
     setStatus('Tent duplicated. Drag the new layer to the correct position.');
+  }
+  function startLogistics(item){
+    if(!token){setStatus('Load the map before drawing site marks.');return;}
+    setLogisticsDraft({...item,points:[]});
+    setLogisticsHover(null);setLogisticsSelected(null);
+    setPendingTent(null);setSelected(null);
+    setTool('logistics');
+    setStatus('Drawing '+item.label+'. Click the map, then finish or cancel in Site Logistics.');
+  }
+  function finishLogistics(){
+    if(!logisticsDraft)return;
+    const category=logisticsType(logisticsDraft.type),count=logisticsDraft.points.length;
+    if(count<(category.kind==='route'?2:category.kind==='area'?3:1)){
+      setStatus('Add more points before finishing the mark.');return;
+    }
+    const completed={...logisticsDraft,points:logisticsDraft.points.slice(0,150)};
+    setProject(p=>({...p,logistics:[...(p.logistics||[]).filter(t=>t.id!==completed.id),completed]}));
+    setLogisticsDraft(null);setLogisticsHover(null);setLogisticsSelected(completed.id);
+    setTool('select');setStatus(completed.label+' saved to the project.');
+  }
+  function cancelLogistics(){setLogisticsDraft(null);setLogisticsHover(null);setTool('select');}
+  function updateLogistics(id,patch){
+    setProject(p=>({...p,logistics:(p.logistics||[]).map(t=>t.id===id?{...t,...patch}:t)}),{group:'logistics-edit'});
+  }
+  function removeLogistics(id){
+    const item=logistics.find(t=>t.id===id);
+    if(!item||!window.confirm('Delete site mark “'+item.label+'”?'))return;
+    setProject(p=>({...p,logistics:(p.logistics||[]).filter(t=>t.id!==id)}));
+    if(logisticsSelected===id)setLogisticsSelected(null);
+  }
+  function zoomToLogistics(item){
+    setLogisticsSelected(item.id);setTool('select');
+    const m=mapRef.current,pts=Array.isArray(item.points)?item.points:[];
+    if(!m||!pts.length)return;
+    if(pts.length===1){m.flyTo({center:pts[0],zoom:Math.max(m.getZoom(),19)});return;}
+    const bounds=new mapboxgl.LngLatBounds();
+    pts.forEach(p=>bounds.extend(p));
+    m.fitBounds(bounds,{padding:100,maxZoom:20});
   }
   function deleteTent(t){
     if(!window.confirm('Delete this '+t.width+' × '+t.length+' ft tent from the site plan?'))return;
@@ -534,15 +575,17 @@ function App(){
       const p=JSON.parse(await file.text());if(p.format!=='uds-v0.1'||!Array.isArray(p.tents))throw Error('Not a Universal Design Studio project');
       const valid=p.tents.filter(t=>Number.isFinite(t.lng)&&Number.isFinite(t.lat)&&t.width>0&&t.length>0).slice(0,150);
       setProject({name:String(p.name||'Imported plan'),center:p.center||[-90.1994,38.627],zoom:p.zoom||17,tents:valid,
+        logistics:Array.isArray(p.logistics)?p.logistics.slice(0,200):[],
         measurement:{points:Array.isArray(p.measurement?.points)?p.measurement.points.filter(a=>Array.isArray(a)&&a.length===2&&a.every(Number.isFinite)).slice(0,100):[],closed:Boolean(p.measurement?.closed)}});
       setSelected(null);setPendingTent(null);setTool('select');
       setMeasureCursor(null);setNearStart(false);
+      setLogisticsDraft(null);setLogisticsHover(null);setLogisticsSelected(null);
       if(p.center)mapRef.current?.jumpTo({center:p.center,zoom:p.zoom||17});
     }catch(err){setStatus('Import failed: '+err.message);}
   }
   return <div className="layout">
     <aside className="sidebar">
-      <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.9</small></div></div>
+      <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V1.0</small></div></div>
       <div className="quick-actions">
         <button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button>
         <div className="history-controls">
@@ -552,10 +595,15 @@ function App(){
       </div>
       <CloudProjects project={project} measurement={{points,closed:measureClosed}} onLoadProject={loadCloudProject}/>
       <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><p className="hint">To open the map automatically on every computer, set <code>VITE_MAPBOX_PUBLIC_TOKEN</code> once in Appwrite Sites → Settings → Environment variables, then redeploy. This manual entry is a temporary fallback.</p><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
+      <SiteLogisticsPanel items={logistics} draft={logisticsDraft} selected={logisticsSelected}
+        onSelect={id=>{setLogisticsSelected(id);setSelected(null);setTool('select');}}
+        onStart={startLogistics} onFinish={finishLogistics} onCancel={cancelLogistics}
+        onBack={()=>setLogisticsDraft(d=>d?{...d,points:d.points.slice(0,-1)}:d)}
+        onChange={updateLogistics} onRemove={removeLogistics} onZoom={zoomToLogistics}/>
       <section><h3>Tools</h3>
         <div className="grid">
-          <button className={tool==='select'?'active':''} disabled={!token} onClick={()=>{setTool('select');setPendingTent(null);setMeasureCursor(null);}}>Select / drag</button>
-          <button className={tool==='measure'?'active':''} disabled={!token} onClick={()=>{setTool('measure');setPendingTent(null);setPoints([]);setMeasureCursor(null);setMeasureClosed(false);setNearStart(false);}}>New measurement</button>
+          <button className={tool==='select'?'active':''} disabled={!token} onClick={()=>{setTool('select');setPendingTent(null);setMeasureCursor(null);setLogisticsDraft(null);setLogisticsHover(null);}}>Select / drag</button>
+          <button className={tool==='measure'?'active':''} disabled={!token} onClick={()=>{setTool('measure');setPendingTent(null);setLogisticsDraft(null);setLogisticsHover(null);setPoints([]);setMeasureCursor(null);setMeasureClosed(false);setNearStart(false);}}>New measurement</button>
         </div>
         <p className="hint">{tool==='measure'?(measureClosed?'Outline closed. Start a new measurement to draw again.':nearStart?'Click the highlighted starting pin to close your outline.':points.length===0?'Click once to drop your starting pin, then move the mouse to measure.':'Click to add corners; return to the starting pin to finish.'):'Select a tent to adjust its dimensions and clearance, or drag it to reposition.'}</p>
         {points.length>0&&<div className="measure-summary">
