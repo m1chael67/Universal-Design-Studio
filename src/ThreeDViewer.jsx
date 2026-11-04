@@ -1,15 +1,15 @@
 import React,{useEffect,useRef,useState} from 'react';
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
-import {buildTentScene} from './threeDModel.js';
-import {tentDimensions} from './tent3DMath.js';
+import {buildTentScene,buildSiteScene} from './threeDModel.js';
+import {tentDimensions,siteRadius} from './tent3DMath.js';
 import './threeD.css';
 
 const presets=['Perspective','Top-down','Walk-through'];
 export default function ThreeDViewer({tents,onClose}){
   const mount=useRef(null),renderRef=useRef(null),controlsRef=useRef(null);
   const cameraPose=useRef(null),activeId=useRef(null);
-  const [index,setIndex]=useState(0),[roofMode,setRoofMode]=useState('solid'),
+  const [index,setIndex]=useState(0),[siteMode,setSiteMode]=useState(false),[roofMode,setRoofMode]=useState('solid'),
     [wallVisible,setWallVisible]=useState(true),[frameVisible,setFrameVisible]=useState(true),
     [furnitureVisible,setFurnitureVisible]=useState(true),[roofStyle,setRoofStyle]=useState('gable'),
     [legHeight,setLegHeight]=useState(7),[baySpacing,setBaySpacing]=useState(20),
@@ -40,14 +40,14 @@ export default function ThreeDViewer({tents,onClose}){
     cameraPose.current=null;
   }
   function switchTent(next){
-    cameraPose.current=null;setSelectedItem(null);setView('Perspective');setIndex(Number(next));
+    cameraPose.current=null;setSelectedItem(null);setView('Perspective');
+    if(next==='all'){setSiteMode(true);}else{setSiteMode(false);setIndex(Number(next));}
   }
   useEffect(()=>{
     if(!tent||!mount.current)return;
-    const host=mount.current,id=String(tent.id||index);
+    const host=mount.current,id=siteMode?'all-site':String(tent.id||index);
     let scene,renderer,camera,controls,observer,animation=0,model,down=null;
-    const disposables=[];
-    const onDown=e=>{down={x:e.clientX,y:e.clientY};};
+        const onDown=e=>{down={x:e.clientX,y:e.clientY};};
     const onUp=e=>{
       if(!down||!renderer||Math.hypot(e.clientX-down.x,e.clientY-down.y)>7){down=null;return;}
       down=null;
@@ -63,7 +63,7 @@ export default function ThreeDViewer({tents,onClose}){
     };
     try{
       const {length,width}=tentDimensions(tent);
-      const radius=Math.max(length,width,20);
+      const radius=siteMode?siteRadius(choices):Math.max(length,width,20);
       scene=new THREE.Scene();scene.background=new THREE.Color(0x1c303a);
       camera=new THREE.PerspectiveCamera(48,1,.1,Math.max(1500,radius*10));
       camera.position.set(radius*.94,radius*.67,radius*.9);
@@ -92,10 +92,9 @@ export default function ThreeDViewer({tents,onClose}){
       ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
       const grid=new THREE.GridHelper(radius*2,Math.min(80,Math.max(10,Math.round(radius))),0x8ca69a,0x557366);
       grid.position.y=.025;scene.add(grid);
-      model=buildTentScene(scene,tent,{
-        roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing
-      });
-      setSummary({bays:model.bays,walls:model.walls.rendered,doors:model.walls.doors,items:model.visibleObjects});
+      const options={roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing};
+      model=siteMode?buildSiteScene(scene,choices,options):buildTentScene(scene,tent,options);
+      setSummary({bays:model.bays,walls:model.walls?.rendered||0,doors:model.walls?.doors||0,items:model.visibleObjects});
       if(cameraPose.current?.id===id){
         camera.position.fromArray(cameraPose.current.position);
         controls.target.fromArray(cameraPose.current.target);
@@ -128,7 +127,7 @@ export default function ThreeDViewer({tents,onClose}){
           renderer.render(scene,camera);
           const a=document.createElement('a');
           a.href=renderer.domElement.toDataURL('image/png');
-          a.download=String(tent.name||'tent').replace(/[^\w-]+/g,'-').slice(0,55)+'-3d.png';
+          a.download=(siteMode?'entire-site':String(tent.name||'tent').replace(/[^\w-]+/g,'-').slice(0,55))+'-3d.png';
           document.body.appendChild(a);a.click();a.remove();
         }catch(err){setError('Unable to export this 3D image: '+err.message);}
       };
@@ -151,7 +150,7 @@ export default function ThreeDViewer({tents,onClose}){
       renderer?.dispose();renderer?.domElement?.remove();
       controlsRef.current=null;renderRef.current=null;
     };
-  },[tent,index,roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing]);
+  },[tent,index,siteMode,roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing]);
   useEffect(()=>{
     const onKey=e=>{if(e.key==='Escape')onClose();};
     window.addEventListener('keydown',onKey);
@@ -163,7 +162,8 @@ export default function ThreeDViewer({tents,onClose}){
         <button type="button" onClick={onClose}>Close ×</button>
       </header>
       <div className="three-d-tools">
-        <label>Tent<select value={Math.min(index,Math.max(0,choices.length-1))} onChange={e=>switchTent(e.target.value)}>
+        <label>View tents<select value={siteMode?'all':Math.min(index,Math.max(0,choices.length-1))} onChange={e=>switchTent(e.target.value)}>
+          {choices.length>1&&<option value="all">Entire site · all tents</option>}
           {choices.map((t,i)=><option key={t.id||i} value={i}>{t.name||'Tent '+(i+1)} · {t.width} × {t.length} ft</option>)}
         </select></label>
         <label>Roof profile<select value={roofStyle} onChange={e=>setRoofStyle(e.target.value)}>
@@ -190,7 +190,7 @@ export default function ThreeDViewer({tents,onClose}){
       <div className="three-d-viewport" ref={mount}>
         {!tent&&<p>No visible tents yet. Add a tent to the satellite plan first.</p>}
         {size&&<div className="three-d-metrics" aria-label="Tent dimensions">
-          <strong>{size.width} × {size.length} ft</strong><span>{legHeight} ft legs</span>
+          <strong>{siteMode?'Entire site · '+choices.length+' tents':size.width+' × '+size.length+' ft'}</strong><span>{legHeight} ft legs</span>
           {summary&&<span>{summary.bays} bays · {summary.items} furniture items</span>}
         </div>}
         {selectedItem&&<div className="three-d-selected"><div><strong>{selectedItem.title}</strong>
@@ -198,7 +198,7 @@ export default function ThreeDViewer({tents,onClose}){
           <button type="button" aria-label="Dismiss selected furniture" onClick={()=>setSelectedItem(null)}>×</button></div>}
       </div>
       <footer>{error&&<p role="alert">{error}</p>}
-        <p>Uses your saved interior layout, including door openings in enabled sidewalls. Roof profiles, frame members and heights are illustrative; confirm manufacturer specifications and site requirements.</p>
+        <p>Uses saved interiors and door openings. Entire-site view positions tents using project coordinates on a flat illustrative surface, not surveyed terrain. Confirm manufacturer specifications and site requirements.</p>
       </footer>
     </div>
   </div>;
