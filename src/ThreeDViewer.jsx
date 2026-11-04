@@ -14,6 +14,7 @@ export default function ThreeDViewer({tents,onClose}){
     [wallVisible,setWallVisible]=useState(true),[frameVisible,setFrameVisible]=useState(true),
     [furnitureVisible,setFurnitureVisible]=useState(true),[roofStyle,setRoofStyle]=useState('westcoast'),
     [legHeight,setLegHeight]=useState(7),[baySpacing,setBaySpacing]=useState(20),
+    [showDimensions,setShowDimensions]=useState(false),
     [view,setView]=useState('Perspective'),[selectedItem,setSelectedItem]=useState(null),
     [summary,setSummary]=useState(null),[error,setError]=useState('');
   const choices=(tents||[]).filter(t=>!t.hidden);
@@ -122,9 +123,10 @@ export default function ThreeDViewer({tents,onClose}){
       ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
       const grid=new THREE.GridHelper(radius*2,Math.min(80,Math.max(10,Math.round(radius))),0x8ca69a,0x557366);
       grid.position.y=.025;scene.add(grid);
-      const options={roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing};
+      const options={roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing,showDimensions};
       model=siteMode?buildSiteScene(scene,choices,options):buildTentScene(scene,tent,options);
-      setSummary({bays:model.bays,walls:model.walls?.rendered||0,doors:model.walls?.doors||0,items:model.visibleObjects});
+      setSummary({bays:model.bays,walls:model.walls?.rendered||0,doors:model.walls?.doors||0,
+        items:model.visibleObjects,ridge:model.ridge,frameProfile:model.frameProfile});
       if(cameraPose.current?.id===id){
         camera.position.fromArray(cameraPose.current.position);
         controls.target.fromArray(cameraPose.current.target);
@@ -181,12 +183,14 @@ export default function ThreeDViewer({tents,onClose}){
       controls?.dispose();
       scene?.traverse(obj=>{
         obj.geometry?.dispose();
-        if(obj.material)(Array.isArray(obj.material)?obj.material:[obj.material]).forEach(m=>m.dispose());
+        if(obj.material)(Array.isArray(obj.material)?obj.material:[obj.material]).forEach(m=>{
+          m.map?.dispose();m.dispose();
+        });
       });
       renderer?.dispose();renderer?.domElement?.remove();
       controlsRef.current=null;renderRef.current=null;
     };
-  },[tent,index,siteMode,roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing]);
+  },[tent,index,siteMode,roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing,showDimensions]);
   useEffect(()=>{
     const onKey=e=>{if(e.key==='Escape')onClose();};
     window.addEventListener('keydown',onKey);
@@ -209,18 +213,22 @@ export default function ThreeDViewer({tents,onClose}){
           <option value={7}>7 ft</option><option value={8}>8 ft</option><option value={9}>9 ft</option>
           <option value={10}>10 ft</option><option value={12}>12 ft</option>
         </select></label>
-        <label>Bay size<select value={baySpacing} onChange={e=>setBaySpacing(Number(e.target.value))}>
+        {roofStyle==='westcoast'?<span className="three-d-auto-bay" title="West Coast side-tee spacing follows the selected Celina tent family">Celina frame spacing · automatic</span>:<label>Bay size<select value={baySpacing} onChange={e=>setBaySpacing(Number(e.target.value))}>
           <option value={10}>10 ft</option><option value={15}>15 ft</option><option value={20}>20 ft</option>
-        </select></label>
+        </select></label>}
         <label>Roof<select value={roofMode} onChange={e=>setRoofMode(e.target.value)}>
           <option value="solid">Canvas</option><option value="xray">Transparent</option><option value="hidden">Hidden</option>
         </select></label>
         <label className="three-d-check"><input type="checkbox" checked={wallVisible} onChange={e=>setWallVisible(e.target.checked)}/> Sidewalls</label>
         <label className="three-d-check"><input type="checkbox" checked={frameVisible} onChange={e=>setFrameVisible(e.target.checked)}/> Frame</label>
         <label className="three-d-check"><input type="checkbox" checked={furnitureVisible} onChange={e=>setFurnitureVisible(e.target.checked)}/> Furniture</label>
+        <label className="three-d-check"><input type="checkbox" checked={showDimensions} onChange={e=>setShowDimensions(e.target.checked)}/> Show dimensions</label>
       </div>
       <nav className="three-d-actions" aria-label="3D camera and export controls">
         {presets.map(p=><button type="button" key={p} aria-pressed={view===p} className={view===p?'active':''} onClick={()=>chooseView(p)}>{p}</button>)}
+        <button type="button" className={roofMode==='hidden'&&frameVisible?'active':''}
+          aria-pressed={roofMode==='hidden'&&frameVisible}
+          onClick={()=>{setRoofMode(mode=>mode==='hidden'?'solid':'hidden');setFrameVisible(true);}}>Frame-only view</button>
         <button type="button" disabled={!tent} onClick={()=>renderRef.current?.()}>Export 3D image</button>
       </nav>
       {view==='Walk-through'&&!siteMode&&<div className="three-d-walk" aria-label="Walk-through navigation">
@@ -235,13 +243,15 @@ export default function ThreeDViewer({tents,onClose}){
         {size&&<div className="three-d-metrics" aria-label="Tent dimensions">
           <strong>{siteMode?'Entire site · '+choices.length+' tents':size.width+' × '+size.length+' ft'}</strong><span>{legHeight} ft legs</span>
           {summary&&<span>{summary.bays} bays · {summary.items} furniture items</span>}
+          {summary?.ridge!=null&&<span>Ridge {summary.ridge.toFixed(1)} ft</span>}
+          {!siteMode&&summary?.frameProfile&&<span>{summary.frameProfile.verifiedFamily?summary.frameProfile.family+' reference':'Custom size · approximate frame'} · {summary.frameProfile.legCount} perimeter legs</span>}
         </div>}
         {selectedItem&&<div className="three-d-selected"><div><strong>{selectedItem.title}</strong>
           <span>{selectedItem.width.toFixed(1)} × {selectedItem.depth.toFixed(1)} ft · {selectedItem.type}</span></div>
           <button type="button" aria-label="Dismiss selected furniture" onClick={()=>setSelectedItem(null)}>×</button></div>}
       </div>
       <footer>{error&&<p role="alert">{error}</p>}
-        <p>Uses saved interiors and door openings. Entire-site view positions tents using project coordinates on a flat illustrative surface, not surveyed terrain. Confirm manufacturer specifications and site requirements.</p>
+        <p>Uses saved interiors and door openings. Entire-site view positions tents using project coordinates on a flat illustrative surface, not surveyed terrain. Celina-based West Coast frames are visual approximations, not pipe cut lists or engineering; confirm manufacturer specifications and site requirements.</p>
       </footer>
     </div>
   </div>;
