@@ -1,0 +1,24 @@
+.admin-preview-backdrop{position:fixed;inset:0;background:#061016ed;z-index:2000;display:flex;padding:12px;color:#f0f8fa;font-family:Inter,system-ui,sans-serif}
+.admin-preview-shell{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;border:1px solid #56847c;border-radius:12px;overflow:hidden;background:#101e28;box-shadow:0 12px 55px #000a}
+.admin-preview-header{background:#1c303d;display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #3f5b60}
+.admin-preview-header>div:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.admin-preview-header strong{font-size:17px;overflow-wrap:anywhere}
+.admin-preview-header span{color:#acc5c7;font-size:11px}
+.admin-preview-actions{display:flex;gap:8px;flex-wrap:wrap}
+.admin-preview-actions button{color:white;border:1px solid #618a88;background:#274653;padding:9px 12px;border-radius:7px;font-size:12px}
+.admin-preview-actions button:last-child{background:#8a4342;border-color:#bd7171}
+.admin-preview-main{display:flex;flex:1;min-height:0}
+.admin-preview-map{position:relative;flex:1;min-width:0;background:#1b2e39}
+.admin-preview-map .mapboxgl-map{width:100%;height:100%}
+.admin-preview-sidebar{width:260px;overflow-y:auto;background:#172b36;border-left:1px solid #4a606c;padding:15px;font-size:12px}
+.admin-preview-sidebar h3{font-size:13px;margin:0 0 8px}
+.admin-preview-sidebar>p{color:#b2cbd1;line-height:1.55;font-size:12px}
+.admin-preview-tent{border:1px solid #3f6069;border-radius:9px;background:#223b46;padding:8px;margin:8px 0}
+.admin-preview-tent.chosen{border-color:#e6c577;background:#3b463e}
+.admin-preview-tent>button{background:#365464;width:100%;display:flex;flex-direction:column;gap:5px;align-items:start;text-align:left;padding:9px;border-radius:6px;color:white;border:1px solid #51737b}
+.admin-preview-tent>button>span{color:#d7ebea;font-size:11px}
+.admin-preview-details{display:flex;flex-direction:column;gap:5px;margin-top:7px;color:#c4d8db;font-size:11px}
+.admin-preview-overlay{position:absolute;z-index:6;top:12px;left:12px;padding:10px 12px;background:#19343be3;border-radius:9px;border:1px solid #5fae9b;display:flex;align-items:center;gap:8px;color:#e8fff5;font-size:12px}
+.admin-preview-overlay input{width:16px;height:16px;accent-color:#19ac94}
+.admin-preview-status{position:absolute;z-index:7;bottom:15px;left:15px;right:15px;background:#522c2ce8;padding:12px;border:1px solid #dc8b8b;border-radius:8px;font-size:12px}
+@media(max-width:760px){.admin-preview-backdrop{padding:0}.admin-preview-shell{border-radius:0}.admin-preview-header{align-items:start;flex-direction:column}.admin-preview-main{flex-direction:column}.admin-preview-sidebar{width:100%;max-height:33%;border-top:1px solid #4a606c;border-left:0}.admin-preview-map{min-height:280px}}
