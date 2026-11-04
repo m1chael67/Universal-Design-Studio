@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import './interior.css';
 import {recommendSeating,SEATING_TABLE_OPTIONS,SEAT_COUNT_CHOICES} from './layoutOptimizer.js';
+import {findStageForStairs} from './stageMatching.js';
 
 const CATALOG = [
   {key:'round5',title:'60″ round table',type:'round',w:5,h:5,color:'#68c5ba'},
@@ -75,7 +76,7 @@ function XYField({label,value,min=0,max=2000,step=0.25,onCommit}){
   }
   return <label className="ip-field">{label}<input ref={ref} type="number" step={step} min={min} max={max} value={raw} onChange={e=>setRaw(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==='Enter'&&e.currentTarget.blur()}/></label>;
 }
-function ItemShape({item,selected,press,outside,showHandle=true}){
+function ItemShape({item,selected,press,outside,showHandle=true,stageLink=null}){
   const {w,h,type}=item,clr=(CATALOG.find(c=>c.key===item.catalog)?.color)||'#b2c0c9';
   const rounded=type==='round';
   const outline=outside?'#ff796d':selected?'#ffda8b':'#e8f5f8';
@@ -91,6 +92,7 @@ function ItemShape({item,selected,press,outside,showHandle=true}){
     {type==='chair'&&<path d={`M ${-w*.3} ${-h*.22} L ${w*.3} ${-h*.22}`} stroke="#263a54" strokeWidth=".18" strokeLinecap="round"/>}
     {type==='stage'&&<g pointerEvents="none" stroke="#8b9399" strokeWidth=".075" opacity=".85">{Array.from({length:Math.max(0,Math.floor(w/4)-1)},(_,i)=><line key={'x'+i} x1={-w/2+4*(i+1)} x2={-w/2+4*(i+1)} y1={-h/2} y2={h/2}/>)}{Array.from({length:Math.max(0,Math.floor(h/4)-1)},(_,i)=><line key={'y'+i} x1={-w/2} x2={w/2} y1={-h/2+4*(i+1)} y2={-h/2+4*(i+1)}/>)}</g>}
     {type==='stairs'&&<g pointerEvents="none"><line x1={-w/2+.15} x2={w/2-.15} y1={-h/2+.13} y2={-h/2+.13} stroke="#fff3a2" strokeWidth=".22"/><text x="0" y={-h/2+.52} fontSize=".42" fontWeight="800" textAnchor="middle" fill="#fff3a2">TOP / STAGE</text>{[1,2].map(i=><line key={i} x1={-w/2+.12} x2={w/2-.12} y1={-h/2+h*i/3} y2={-h/2+h*i/3} stroke="#675a4c" strokeWidth=".09"/>)}</g>}
+    {type==='stairs'&&stageLink&&<g pointerEvents="none"><circle cx={w/2-.27} cy={h/2-.28} r=".3" fill="#4ade80" stroke="#123b2a" strokeWidth=".07"/><text x={w/2-.27} y={h/2-.28} fontSize=".36" fontWeight="800" fill="#083519" textAnchor="middle" dominantBaseline="middle">✓</text></g>}
     {type==='dance'&&<><path d={`M ${-w/2} 0 H ${w/2} M 0 ${-h/2} V ${h/2}`} stroke="#806180" strokeWidth=".1" strokeDasharray=".7,.4"/></>}
     {caption&&<g pointerEvents="none">
       <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038">{caption}</text>
@@ -169,6 +171,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
     }
   },[tent.id,tent.interior?.orientation,tent.interior?.chairSizing]);
   const chosen=layout.objects.find(o=>o.id===selected);
+  const stageLink=chosen?.type==='stairs'?findStageForStairs(chosen,layout.objects):null;
   const selectedMeasurement=layout.measurements.find(m=>'measure:'+m.id===selected);
   const alignmentGuide=chosen?(()=>{
     const angle=((chosen.rot||0)%360+360)%360;
@@ -547,7 +550,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
               <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
             </div>
             {chosen.type==='stage'&&<><XYField key={chosen.id+'height'} label="Stage height (inches)" value={Number(chosen.heightInches)||16} min={4} max={72} step={1} onCommit={heightInches=>updateObject(chosen.id,{heightInches})}/><p className="ip-help">Bil-Jax: stage width and depth are made from 4 × 4 ft modules. Default deck height is 16″; gray seams mark each section.</p></>}
-            {chosen.type==='stairs'&&<p className="ip-help">The yellow TOP / STAGE line is the high end of the stairs. Rotate the stairs to align that edge with the stage. New stairs default to 4 ft wide × 3 ft deep; existing saved stairs keep their dimensions.</p>}
+            {chosen.type==='stairs'&&<><p className="ip-help">The yellow TOP / STAGE line is the high end of the stairs. Rotate and position it along the outside edge of a stage to connect them automatically.</p>{stageLink?<p className="ip-help" role="status" style={{color:'#63edaa',fontWeight:700}}>✓ Linked to stage · stairs automatically match its {stageLink.stageHeightInches}″ deck height, including future stage-height changes.</p>:<p className="ip-help">Not connected to a stage yet · stairs use {Number(chosen.heightInches)||16}″ height until attached.</p>}</>}
             {chosen.type==='dance'&&<label className="ip-check ip-custom-dance">
               <input type="checkbox" checked={Boolean(chosen.customSize)} onChange={e=>updateObject(chosen.id,{
                 customSize:e.target.checked,
@@ -735,7 +738,8 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
             </g>}
             {layout.objects.map(item=><ItemShape key={item.id} item={item}
               selected={selectedIds.includes(item.id)||selected===item.id}
-              outside={exceedsTent(item,w,h)} showHandle={selectedIds.length<=1} press={beginDrag}/>)}
+              outside={exceedsTent(item,w,h)} showHandle={selectedIds.length<=1} press={beginDrag}
+              stageLink={item.type==='stairs'?findStageForStairs(item,layout.objects):null}/>)}
             {marquee&&<rect x={Math.min(marquee.start.x,marquee.end.x)} y={Math.min(marquee.start.y,marquee.end.y)}
               width={Math.abs(marquee.end.x-marquee.start.x)} height={Math.abs(marquee.end.y-marquee.start.y)}
               stroke="#9ef5e8" strokeWidth=".14" strokeDasharray=".45,.3" fill="#4cd5c2" fillOpacity=".18" pointerEvents="none"/>}
