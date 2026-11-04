@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import mapboxgl from 'mapbox-gl';
 import {interiorGeoJSON} from './mapInterior.js';
-import {siteLogisticsGeoJSON,logisticsType,routeFeet} from './siteLogistics.js';
+import {siteLogisticsGeoJSON,logisticsType,routeFeet,LOGISTICS_CHECKS} from './siteLogistics.js';
 import './adminViewer.css';
 
 const styleUrl='mapbox://styles/mapbox/satellite-streets-v12';
@@ -170,6 +170,10 @@ export default function AdminProjectViewer({record,owner,onClose}){
           </div>)}
           {!tents.length&&<p>No tents in this project.</p>}
           <h3 className="admin-preview-logistics-heading">Site logistics · {marks.length}</h3>
+          <details className="admin-preview-checklist">
+            <summary>Site checks: {LOGISTICS_CHECKS.filter(c=>plan.siteChecklist?.[c.id]).length}/{LOGISTICS_CHECKS.length} verified</summary>
+            {LOGISTICS_CHECKS.map(c=><p key={c.id}>{plan.siteChecklist?.[c.id]?'✓':'○'} {c.name}</p>)}
+          </details>
           {marks.map((m,i)=><button className="admin-preview-mark" onClick={()=>zoomToMark(m)} key={m.id||i}>
             <span className="site-logistics-dot" style={{background:logisticsType(m.type).color}}/>
             <span><strong>{m.label||logisticsType(m.type).name}</strong>
