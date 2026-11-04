@@ -8,7 +8,7 @@ import './threeD.css';
 const presets=['Perspective','Top-down','Walk-through'];
 export default function ThreeDViewer({tents,onClose}){
   const mount=useRef(null),renderRef=useRef(null),controlsRef=useRef(null);
-  const cameraPose=useRef(null),activeId=useRef(null);
+  const cameraPose=useRef(null);
   const [index,setIndex]=useState(0),[siteMode,setSiteMode]=useState(false),[roofMode,setRoofMode]=useState('solid'),
     [wallVisible,setWallVisible]=useState(true),[frameVisible,setFrameVisible]=useState(true),
     [furnitureVisible,setFurnitureVisible]=useState(true),[roofStyle,setRoofStyle]=useState('gable'),
@@ -46,7 +46,7 @@ export default function ThreeDViewer({tents,onClose}){
   useEffect(()=>{
     if(!tent||!mount.current)return;
     const host=mount.current,id=siteMode?'all-site':String(tent.id||index);
-    let scene,renderer,camera,controls,observer,animation=0,model,down=null;
+    let scene,renderer,camera,controls,observer,animation=0,model,down=null,handleResize=null;
         const onDown=e=>{down={x:e.clientX,y:e.clientY};};
     const onUp=e=>{
       if(!down||!renderer||Math.hypot(e.clientX-down.x,e.clientY-down.y)>7){down=null;return;}
@@ -105,16 +105,15 @@ export default function ThreeDViewer({tents,onClose}){
         controls.target.set(length*.23,Math.min(5.3,legHeight-.5),0);
       }
       controls.update();
-      activeId.current=id;
-      controlsRef.current={camera,controls,radius,dimension:{length,width,legHeight}};
-      const resize=()=>{
+            controlsRef.current={camera,controls,radius,dimension:{length,width,legHeight}};
+      handleResize=()=>{
         if(!renderer||!camera)return;
         const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);
         camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);
       };
-      if(typeof ResizeObserver!=='undefined'){observer=new ResizeObserver(resize);observer.observe(host);}
-      else window.addEventListener('resize',resize);
-      resize();
+      if(typeof ResizeObserver!=='undefined'){observer=new ResizeObserver(handleResize);observer.observe(host);}
+      else window.addEventListener('resize',handleResize);
+      handleResize();
       renderer.domElement.addEventListener('pointerdown',onDown);
       renderer.domElement.addEventListener('pointerup',onUp);
       const tick=()=>{
@@ -139,7 +138,7 @@ export default function ThreeDViewer({tents,onClose}){
       };
       cancelAnimationFrame(animation);
       observer?.disconnect();
-      window.removeEventListener('resize',()=>{});
+      if(handleResize)window.removeEventListener('resize',handleResize);
       renderer?.domElement?.removeEventListener('pointerdown',onDown);
       renderer?.domElement?.removeEventListener('pointerup',onUp);
       controls?.dispose();
