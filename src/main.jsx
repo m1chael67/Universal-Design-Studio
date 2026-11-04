@@ -427,6 +427,7 @@ function App(){
     if(!Array.isArray(payload?.tents))return;
     const next={name:String(payload.name||'Cloud site plan'),center:Array.isArray(payload.center)?payload.center:[-90.1994,38.627],
       zoom:payload.zoom||17,tents:payload.tents,logistics:Array.isArray(payload.logistics)?payload.logistics:[],
+      siteChecklist:payload.siteChecklist&&typeof payload.siteChecklist==='object'?payload.siteChecklist:{},
       measurement:payload.measurement||{points:[],closed:false}};
     loadProject(next);
     setSelected(null);setInteriorId(null);setTool('select');setPendingTent(null);
@@ -579,6 +580,7 @@ function App(){
       const valid=p.tents.filter(t=>Number.isFinite(t.lng)&&Number.isFinite(t.lat)&&t.width>0&&t.length>0).slice(0,150);
       setProject({name:String(p.name||'Imported plan'),center:p.center||[-90.1994,38.627],zoom:p.zoom||17,tents:valid,
         logistics:Array.isArray(p.logistics)?p.logistics.slice(0,200):[],
+        siteChecklist:p.siteChecklist&&typeof p.siteChecklist==='object'?p.siteChecklist:{},
         measurement:{points:Array.isArray(p.measurement?.points)?p.measurement.points.filter(a=>Array.isArray(a)&&a.length===2&&a.every(Number.isFinite)).slice(0,100):[],closed:Boolean(p.measurement?.closed)}});
       setSelected(null);setPendingTent(null);setTool('select');
       setMeasureCursor(null);setNearStart(false);
@@ -606,6 +608,9 @@ function App(){
       <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><p className="hint">To open the map automatically on every computer, set <code>VITE_MAPBOX_PUBLIC_TOKEN</code> once in Appwrite Sites → Settings → Environment variables, then redeploy. This manual entry is a temporary fallback.</p><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
       <div ref={logisticsPanelRef} className="site-logistics-anchor">
       <SiteLogisticsPanel jumpToken={logisticsJump} items={logistics} draft={logisticsDraft} selected={logisticsSelected}
+        checklist={project.siteChecklist||{}} onChecklistChange={(key,value)=>{
+          setProject(p=>({...p,siteChecklist:{...(p.siteChecklist||{}),[key]:value}}));
+        }}
         onSelect={id=>{setLogisticsSelected(id);setSelected(null);setTool('select');}}
         onStart={startLogistics} onFinish={finishLogistics} onCancel={cancelLogistics}
         onBack={()=>setLogisticsDraft(d=>d?{...d,points:d.points.slice(0,-1)}:d)}
