@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './style.css';
+import InteriorPlanner from './InteriorPlanner.jsx';
 
 const FEET = 3.280839895;
 const MAP_STYLES = {
@@ -107,6 +108,7 @@ function App(){
   const [measureClosed,setMeasureClosed]=useState(false);
   const [nearStart,setNearStart]=useState(false);
   const [selected,setSelected]=useState(null);
+  const [interiorId,setInteriorId]=useState(null);
   const [pendingTent,setPendingTent]=useState(null);
   const [widthDraft,setWidthDraft]=useState('20');
   const [lengthDraft,setLengthDraft]=useState('40');
@@ -117,6 +119,7 @@ function App(){
   const addSectionRef=useRef(null),editorRef=useRef(null);
   const tents=Array.isArray(project.tents)?project.tents:[];
   const chosen=tents.find(t=>t.id===selected);
+  const interiorTent=tents.find(t=>t.id===interiorId);
   live.current={tool,tents,points,measureCursor,measureClosed,nearStart,selected,width,length,rotation,clearance,pendingTent};
   // Do not overwrite a field while the user is editing it or while the dial moves.
   useEffect(()=>{
@@ -156,7 +159,7 @@ function App(){
     if(!token||!mapDiv.current)return;
     mapboxgl.accessToken=token;
     let m;
-    try{m=new mapboxgl.Map({container:mapDiv.current,style:MAP_STYLES[mapStyle],center:project.center||[-90.1994,38.627],zoom:project.zoom||17,preserveDrawingBuffer:true});
+    try{m=new mapboxgl.Map({container:mapDiv.current,style:MAP_STYLES[mapStyle],center:project.center||[-90.1994,38.627],zoom:project.zoom||17,maxZoom:24,preserveDrawingBuffer:true});
     }catch(err){setStatus('Map failed: '+err.message);return;}
     mapRef.current=m;ready.current=false;setStatus('Loading satellite imagery…');
     m.addControl(new mapboxgl.NavigationControl(),'top-right');
@@ -301,6 +304,7 @@ function App(){
     }catch(err){setStatus('Address search failed: '+err.message);}
   }
   function editTent(patch){setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===selected?{...t,...patch}:t)}));}
+  function saveInterior(next){setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===interiorId?{...t,interior:next}:t)}));}
   function changeSelectedDimension(field,raw){
     const setters={width:setWidthDraft,length:setLengthDraft,rotation:setRotationDraft,clearance:setClearanceDraft};
     setters[field](raw);
@@ -413,7 +417,7 @@ function App(){
   }
   return <div className="layout">
     <aside className="sidebar">
-      <div className="brand"><img className="crew-brand-logo" src="https://raw.githubusercontent.com/m1chael67/universal-crew-app/main/logo_resized.png" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.4</small></div></div>
+      <div className="brand"><img className="crew-brand-logo" src="https://raw.githubusercontent.com/m1chael67/universal-crew-app/main/logo_resized.png" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.5</small></div></div>
       <div className="quick-actions"><button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button></div>
       <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
       <section><h3>Tools</h3>
@@ -468,6 +472,7 @@ function App(){
             <label>Clearance (ft per side)<input type="number" min="0" max="200" step="0.01" value={clearanceDraft} onChange={e=>changeSelectedDimension('clearance',e.target.value)} onBlur={()=>finishSelectedDimension('clearance',clearanceDraft)}/></label>
           </div>
           <p className="hint">Changes update this highlighted tent directly. The dashed perimeter represents the additional clearance.</p>
+          <button className="primary" style={{width:'100%',margin:'5px 0 12px'}} onClick={()=>setInteriorId(chosen.id)}>Edit Interior — Tables, Chairs & Stage</button>
           <div className="grid">
             <button onClick={()=>{const angle=(chosen.rotation+15)%360;editTent({rotation:angle});setRotationDraft(String(angle));}}>Rotate +15°</button>
             <button onClick={()=>duplicateTent(chosen)}>Duplicate tent</button>
@@ -477,7 +482,8 @@ function App(){
       <section ref={addSectionRef} className="add-tent-section"><h3>New tent settings</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Place a new tent</button>{tool==='place'&&<div className="placement-controls"><strong>Placement mode is active</strong><p>Click once on the map to add your tent. You'll immediately be able to edit its layer.</p><button onClick={cancelTent}>Cancel placement</button></div>}</section>
       <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Save editable project (.json)</button><label className="filebutton">Open editable project (.json)<input type="file" accept=".json" onChange={importFile}/></label><div className="grid image-exports"><button disabled={!token} onClick={()=>exportImage('png')}>Export PNG</button><button disabled={!token} onClick={()=>exportImage('jpg')}>Export JPG</button></div><p className="hint">JSON saves editable tent geometry for reopening. PNG/JPG are flat pictures of the map. Projects are saved in this browser; Appwrite cloud saving comes later.</p></section>
     </aside>
-    <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">'Click on the map to place your tent. Press Cancel placement to exit.'</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
+    <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">Click on the map to place your tent. Press Cancel placement to exit.</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
+    {interiorTent&&<InteriorPlanner tent={interiorTent} onChange={saveInterior} onClose={()=>{setInteriorId(null);requestAnimationFrame(()=>mapRef.current?.resize());}}/>}
   </div>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
