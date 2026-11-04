@@ -10,11 +10,11 @@ const CATALOG = [
   {key:'cocktail',title:'Cocktail table',type:'round',w:2.5,h:2.5,color:'#68c5ba'},
   {key:'folding',title:'Folding chair',type:'chair',w:1.45,h:1.45,color:'#9aaddc'},
   {key:'chiavari',title:'Chiavari chair',type:'chair',w:1.45,h:1.45,color:'#9aaddc'},
-  {key:'stage',title:'Bil-Jax stage (4 ft sections)',type:'stage',w:4,h:4,color:'#e7b66c'},
+  {key:'stage',title:'Bil-Jax stage (4 ft sections)',type:'stage',w:4,h:4,color:'#202327'},
   {key:'dance',title:'Dance floor (3 ft panels)',type:'dance',w:12,h:12,color:'#d7a6cb'},
   {key:'bar6',title:'Bar 6 ft',type:'bar',w:6,h:2.5,color:'#a4c782'},
   {key:'bar7',title:'Bar 7 ft',type:'bar',w:7,h:2.5,color:'#a4c782'},
-  {key:'stairs',title:'Stage stairs 3 × 4 ft',type:'stairs',w:3,h:4,color:'#e3a97e'},
+  {key:'stairs',title:'Stage stairs 4 × 3 ft',type:'stairs',w:4,h:3,color:'#b1a28a'},
   // No buffet table preset; regular tables can be repurposed manually.
 ];
 const WALLS=['top','right','bottom','left'];
@@ -58,7 +58,7 @@ function itemDescription(o){
   if(o.type==='round')return o.catalog==='cocktail'?'Cocktail table ('+fmtSize(o.w)+' ft)':
     (Math.round(Number(o.w)*12)+'″ round table');
   if(o.type==='table')return fmtSize(o.w)+' ft rectangular table';
-  if(o.type==='stage')return 'Bil-Jax stage '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
+  if(o.type==='stage')return 'Bil-Jax stage '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft · '+(Number(o.heightInches)||16)+'″ high';
   if(o.type==='dance')return 'Dance floor '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
   if(o.type==='chair')return o.catalog==='chiavari'?'Chiavari chair':'Folding chair';
   if(o.type==='stairs')return 'Stage stairs '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
@@ -89,7 +89,8 @@ function ItemShape({item,selected,press,outside,showHandle=true}){
     {rounded?<ellipse rx={w/2} ry={h/2} fill={clr} fillOpacity=".83" stroke={outline} strokeWidth={selected?0.2:0.08}/>:
       <rect x={-w/2} y={-h/2} width={w} height={h} rx={type==='chair'?0.24:0.12} fill={clr} fillOpacity=".85" stroke={outline} strokeWidth={selected?0.2:0.08}/>}
     {type==='chair'&&<path d={`M ${-w*.3} ${-h*.22} L ${w*.3} ${-h*.22}`} stroke="#263a54" strokeWidth=".18" strokeLinecap="round"/>}
-    {type==='stage'&&<><path d={`M ${-w/2} ${-h/2} L ${w/2} ${h/2} M ${w/2} ${-h/2} L ${-w/2} ${h/2}`} stroke="#866039" strokeWidth=".08" strokeOpacity=".6"/></>}
+    {type==='stage'&&<g pointerEvents="none" stroke="#8b9399" strokeWidth=".075" opacity=".85">{Array.from({length:Math.max(0,Math.floor(w/4)-1)},(_,i)=><line key={'x'+i} x1={-w/2+4*(i+1)} x2={-w/2+4*(i+1)} y1={-h/2} y2={h/2}/>)}{Array.from({length:Math.max(0,Math.floor(h/4)-1)},(_,i)=><line key={'y'+i} x1={-w/2} x2={w/2} y1={-h/2+4*(i+1)} y2={-h/2+4*(i+1)}/>)}</g>}
+    {type==='stairs'&&<g pointerEvents="none"><line x1={-w/2+.15} x2={w/2-.15} y1={-h/2+.13} y2={-h/2+.13} stroke="#fff3a2" strokeWidth=".22"/><text x="0" y={-h/2+.52} fontSize=".42" fontWeight="800" textAnchor="middle" fill="#fff3a2">TOP / STAGE</text>{[1,2].map(i=><line key={i} x1={-w/2+.12} x2={w/2-.12} y1={-h/2+h*i/3} y2={-h/2+h*i/3} stroke="#675a4c" strokeWidth=".09"/>)}</g>}
     {type==='dance'&&<><path d={`M ${-w/2} 0 H ${w/2} M 0 ${-h/2} V ${h/2}`} stroke="#806180" strokeWidth=".1" strokeDasharray=".7,.4"/></>}
     {caption&&<g pointerEvents="none">
       <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038">{caption}</text>
@@ -262,7 +263,8 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
   function addObject(cat){
     const n=layout.objects.length;
     const obj={id:uid(),catalog:cat.key,type:cat.type,label:cat.title,x:cap(w/2+(n%4)*.75,0,w),
-      y:cap(h/2+(n%3)*.75,0,h),w:cat.w,h:cat.h,rot:0};
+      y:cap(h/2+(n%3)*.75,0,h),w:cat.w,h:cat.h,rot:0,
+      ...(cat.type==='stage'?{heightInches:16}:{} )};
     commit({objects:[...layout.objects,obj]});
     selectEntity(obj.id);setPanels(p=>({...p,catalog:false}));
   }
@@ -544,7 +546,8 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
                 onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'h',val):updateObject(chosen.id,{h:val})}/>
               <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
             </div>
-            {chosen.type==='stage'&&<p className="ip-help">Bil-Jax: stage width and depth are made from 4 × 4 ft modules. The size fields round to 4-foot increments.</p>}
+            {chosen.type==='stage'&&<><XYField key={chosen.id+'height'} label="Stage height (inches)" value={Number(chosen.heightInches)||16} min={4} max={72} step={1} onCommit={heightInches=>updateObject(chosen.id,{heightInches})}/><p className="ip-help">Bil-Jax: stage width and depth are made from 4 × 4 ft modules. Default deck height is 16″; gray seams mark each section.</p></>}
+            {chosen.type==='stairs'&&<p className="ip-help">The yellow TOP / STAGE line is the high end of the stairs. Rotate the stairs to align that edge with the stage. New stairs default to 4 ft wide × 3 ft deep; existing saved stairs keep their dimensions.</p>}
             {chosen.type==='dance'&&<label className="ip-check ip-custom-dance">
               <input type="checkbox" checked={Boolean(chosen.customSize)} onChange={e=>updateObject(chosen.id,{
                 customSize:e.target.checked,
