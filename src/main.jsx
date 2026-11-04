@@ -182,9 +182,67 @@ function App(){
     }catch(err){setStatus('Address search failed: '+err.message);}
   }
   function editTent(patch){setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===selected?{...t,...patch}:t)}));}
+  function confirmTent(){
+    if(!pendingTent)return;
+    const id=pendingTent.id;
+    setProject(p=>({...p,tents:[...(p.tents||[]),pendingTent]}));
+    setSelected(id);setPendingTent(null);setTool('select');
+    setStatus('Tent added. Select it to drag or adjust its rotation.');
+  }
+  function cancelTent(){setPendingTent(null);setTool('select');}
+  function deleteTent(t){
+    if(!window.confirm('Delete this '+t.width+' × '+t.length+' ft tent from the site plan?'))return;
+    setProject(p=>({...p,tents:(p.tents||[]).filter(item=>item.id!==t.id)}));
+    if(selected===t.id)setSelected(null);
+  }
+  async function exportImage(ext){
+    const map=mapRef.current;
+    if(!map||!ready.current){setStatus('Open the map before exporting an image.');return;}
+    if(pendingTent){setStatus('Confirm or cancel the tent preview before exporting.');return;}
+    if(!map.loaded()){setStatus('Map imagery is still loading. Try exporting after it finishes.');return;}
+    try{
+      const source=map.getCanvas(), scale=source.width/Math.max(1,source.clientWidth);
+      const footer=Math.ceil(70*scale),canvas=document.createElement('canvas');
+      canvas.width=source.width;canvas.height=source.height+footer;
+      const ctx=canvas.getContext('2d');
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(source,0,0);
+      ctx.fillStyle='#15232d';ctx.fillRect(0,source.height,canvas.width,footer);
+      ctx.fillStyle='#ffffff';ctx.font='bold '+Math.round(16*scale)+'px sans-serif';
+      ctx.fillText((project.name||'Site plan').slice(0,55),14*scale,source.height+25*scale,canvas.width-28*scale);
+      const credits=(map.getContainer().querySelector('.mapboxgl-ctrl-attrib-inner')?.textContent||'© Mapbox © OpenStreetMap')
+        .replace(/Improve this map/gi,'').replace(/\\s+/g,' ').trim();
+      ctx.font=Math.round(11*scale)+'px sans-serif';ctx.fillStyle='#d4e0e5';
+      ctx.fillText((credits+' • Planning concept; verify on site').slice(0,180),14*scale,source.height+50*scale,canvas.width-28*scale);
+      // Include the official Mapbox logo asset if the browser exposes it through the control CSS.
+      const logo=map.getContainer().querySelector('.mapboxgl-ctrl-logo');
+      if(logo){
+        try{
+          const bg=window.getComputedStyle(logo).backgroundImage;
+          const value=bg.match(/^url\\((.+)\\)$/)?.[1]?.replace(/^["']|["']$/g,'');
+          if(value){
+            const logoImage=new Image();logoImage.crossOrigin='anonymous';
+            await new Promise((resolve,reject)=>{logoImage.onload=resolve;logoImage.onerror=reject;logoImage.src=value;});
+            const box=window.getComputedStyle(logo);
+            const w=Math.max(1,parseFloat(box.width)||88), h=Math.max(1,parseFloat(box.height)||23);
+            ctx.drawImage(logoImage,canvas.width-(w+12)*scale,source.height+9*scale,w*scale,h*scale);
+          }
+        }catch{ /* Credit text remains even if the logo asset cannot be captured. */ }
+      }
+      const mime=ext==='jpg'?'image/jpeg':'image/png';
+      canvas.toBlob(blob=>{
+        if(!blob){setStatus('Image export failed.');return;}
+        const url=URL.createObjectURL(blob),a=document.createElement('a');
+        a.href=url;a.download=cleanedFilename(project.name)+'-site-plan.'+ext;
+        document.body.appendChild(a);a.click();a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+        setStatus(ext.toUpperCase()+' image exported. Keep Mapbox credits visible when sharing.');
+      },mime,0.93);
+    }catch(err){setStatus('Image export failed: '+err.message);}
+  }
   function exportFile(){
     const blob=new Blob([JSON.stringify({...project,format:'uds-v0.1'},null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='universal-design-site-plan.json';a.click();URL.revokeObjectURL(url);
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=cleanedFilename(project.name)+'.json';a.click();URL.revokeObjectURL(url);
   }
   async function importFile(e){
     const file=e.target.files?.[0];e.target.value='';if(!file)return;
@@ -193,19 +251,19 @@ function App(){
       const p=JSON.parse(await file.text());if(p.format!=='uds-v0.1'||!Array.isArray(p.tents))throw Error('Not a Universal Design Studio project');
       const valid=p.tents.filter(t=>Number.isFinite(t.lng)&&Number.isFinite(t.lat)&&t.width>0&&t.length>0).slice(0,150);
       setProject({name:String(p.name||'Imported plan'),center:p.center||[-90.1994,38.627],zoom:p.zoom||17,tents:valid});
-      setSelected(null);setPoints([]);if(p.center)mapRef.current?.jumpTo({center:p.center,zoom:p.zoom||17});
+      setSelected(null);setPendingTent(null);setTool('select');setPoints([]);if(p.center)mapRef.current?.jumpTo({center:p.center,zoom:p.zoom||17});
     }catch(err){setStatus('Import failed: '+err.message);}
   }
   return <div className="layout">
     <aside className="sidebar">
       <div className="brand"><span className="mark">U</span><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.1</small></div></div>
       <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
-      <section><h3>Tools</h3><div className="grid">{[['select','Select / drag'],['place','Place tent'],['measure','Measure']].map(([id,label])=><button key={id} className={tool===id?'active':''} disabled={!token} onClick={()=>{setTool(id);if(id==='measure')setPoints([]);}}>{label}</button>)}</div><p className="hint">{tool==='measure'?'Click two points on the map to measure a distance.':tool==='place'?'Click on the satellite map to position a tent.':'Click to select a tent; drag it to reposition.'}</p>{points.length===2&&<div className="measurement">Distance: {distance(points[0],points[1]).toFixed(1)} ft</div>}</section>
-      <section><h3>New tent</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(+e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(+e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(+e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(+e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={()=>setTool('place')}>Place {width} × {length} tent</button></section>
-      <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><button key={t.id} className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+'×'+t.length+' ft'}</button>)}{chosen&&<div className="chosen"><h4>Selected tent</h4><label>Rotation (degrees)<input type="number" value={chosen.rotation} onChange={e=>editTent({rotation:clamp(e.target.value,0,359,0)})}/></label><label>Clearance (feet per side)<input type="number" value={chosen.clearance} onChange={e=>editTent({clearance:clamp(e.target.value,0,200,0)})}/></label><button onClick={()=>editTent({rotation:(chosen.rotation+15)%360})}>Rotate +15°</button><button onClick={()=>{setProject(p=>({...p,tents:p.tents.filter(t=>t.id!==selected)}));setSelected(null);}}>Delete tent</button></div>}</section>
-      <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Export project JSON</button><label className="filebutton">Import project JSON<input type="file" accept=".json" onChange={importFile}/></label><p className="hint">Saved in this browser only. Appwrite cloud storage comes later.</p></section>
+      <section><h3>Tools</h3><div className="grid"><button className={tool==='select'?'active':''} disabled={!token} onClick={()=>{setTool('select');setPendingTent(null);}}>Select / drag</button><button className={tool==='measure'?'active':''} disabled={!token} onClick={()=>{setTool('measure');setPendingTent(null);setPoints([]);}}>Measure</button></div><p className="hint">{tool==='measure'?'Click two points to measure a distance.':tool==='place'?'Click on the map to preview a tent, then confirm below.':'Click a tent to select it. Drag to reposition.'}</p>{points.length===2&&<div className="measurement">Distance: {distance(points[0],points[1]).toFixed(1)} ft</div>}</section>
+      <section><h3>Add a tent</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={()=>{setPendingTent(null);setTool('place');setPoints([]);}}>Add tent — preview position</button>{tool==='place'&&<div className="placement-controls"><strong>{pendingTent?'Tent preview ready':'Click the map to preview the tent'}</strong><p>You can click elsewhere to move the preview. Nothing gets added until you confirm.</p><button className="primary" disabled={!pendingTent} onClick={confirmTent}>Confirm add tent</button><button onClick={cancelTent}>Cancel</button></div>}</section>
+      <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><div key={t.id} className="tent-list-row"><button className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setTool('select');setPendingTent(null);setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+' × '+t.length+' ft'}</button><button className="tent-remove" aria-label={'Delete tent '+(i+1)} title="Delete tent" onClick={()=>deleteTent(t)}>×</button></div>)}{chosen&&<div className="chosen"><h4>Selected tent</h4><RotationDial angle={chosen.rotation} onChange={value=>editTent({rotation:value})}/><label>Rotation (degrees)<input type="number" value={rotationDraft} onChange={e=>setRotationDraft(e.target.value)} onBlur={()=>{const value=clamp(rotationDraft,0,359,chosen.rotation);editTent({rotation:value});setRotationDraft(String(value));}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label><label>Clearance (feet per side)<input type="number" min="0" value={clearanceDraft} onChange={e=>setClearanceDraft(e.target.value)} onBlur={()=>{const value=clamp(clearanceDraft,0,200,chosen.clearance);editTent({clearance:value});setClearanceDraft(String(value));}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label><button onClick={()=>editTent({rotation:(chosen.rotation+15)%360})}>Rotate +15°</button></div>}</section>
+      <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Save editable project (.json)</button><label className="filebutton">Open editable project (.json)<input type="file" accept=".json" onChange={importFile}/></label><div className="grid image-exports"><button disabled={!token} onClick={()=>exportImage('png')}>Export PNG</button><button disabled={!token} onClick={()=>exportImage('jpg')}>Export JPG</button></div><p className="hint">JSON saves editable tent geometry for reopening. PNG/JPG are flat pictures of the map. Projects are saved in this browser; Appwrite cloud saving comes later.</p></section>
     </aside>
-    <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
+    <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">{pendingTent?'Preview only — click Confirm add tent in the sidebar':'Tent placement: click a location to preview'}</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
   </div>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
