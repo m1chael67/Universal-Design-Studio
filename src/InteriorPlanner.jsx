@@ -189,15 +189,43 @@ export default function InteriorPlanner({tent,onChange,onClose}){
       <text x={(a.x+b.x)/2} y={(a.y+b.y)/2-.65} fontSize=".83" textAnchor="middle" paintOrder="stroke" stroke="#21303e" strokeWidth=".55" fill="#fff">{fmt(d)} ft</text>
     </g>;
   };
-  const exportSvg=()=>{
-    const svg=svgRef.current;if(!svg)return;
+  function serializedDrawing(){
+    const svg=svgRef.current;if(!svg)return '';
     const clone=svg.cloneNode(true);
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg');clone.removeAttribute('style');
     clone.setAttribute('width',String(Math.round(svgWidth)));clone.setAttribute('height',String(Math.round(svgHeight)));
-    const blob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'});
-    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;
-    a.download=(tent.name||'Tent').replace(/[^a-z0-9_-]+/gi,'-')+'-floor-plan.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-  };
+    return new XMLSerializer().serializeToString(clone);
+  }
+  function downloadBlob(blob,extension){
+    const url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=(tent.name||'Tent').replace(/[^a-z0-9_-]+/gi,'-')+'-floor-plan.'+extension;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  function exportSvg(){
+    const drawing=serializedDrawing();if(!drawing)return;
+    downloadBlob(new Blob([drawing],{type:'image/svg+xml'}),'svg');
+  }
+  async function exportBitmap(type){
+    const drawing=serializedDrawing();if(!drawing)return;
+    const file=new Blob([drawing],{type:'image/svg+xml'}),url=URL.createObjectURL(file);
+    try{
+      const img=new Image();
+      await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=url;});
+      const width=Math.max(600,Math.min(3000,(w+pad*2)*30));
+      const height=Math.max(600,Math.min(3000,(h+pad*2)*30));
+      const factor=Math.min(1,width/img.width,height/img.height);
+      const output=document.createElement('canvas');output.width=Math.round(img.width*Math.min(4,Math.max(1,factor*3)));
+      output.height=Math.round(img.height*Math.min(4,Math.max(1,factor*3)));
+      output.width=Math.min(3000,output.width);output.height=Math.min(3000,output.height);
+      const ctx=output.getContext('2d');
+      ctx.fillStyle='#1b2d38';ctx.fillRect(0,0,output.width,output.height);
+      ctx.drawImage(img,0,0,output.width,output.height);
+      const mime=type==='jpg'?'image/jpeg':'image/png';
+      const blob=await new Promise(resolve=>output.toBlob(resolve,mime,.94));
+      if(blob)downloadBlob(blob,type);
+    }catch(err){window.alert('Image export failed: '+err.message);}
+    finally{URL.revokeObjectURL(url);}
+  }
   return <div className="ip-shell" role="dialog" aria-modal="true" aria-label="Tent interior floor planner">
     <header className="ip-header">
       <button className="ip-back" onClick={onClose}>← Back to site</button>
@@ -207,8 +235,9 @@ export default function InteriorPlanner({tent,onChange,onClose}){
         <span>{Math.round(zoom*100)}%</span>
         <button onClick={()=>setZoom(z=>cap(z*1.25,.25,12))} title="Zoom in">+</button>
         <button onClick={()=>setZoom(1)}>Fit</button>
+        <input aria-label="Floor plan zoom" type="range" min="0.25" max="12" step="0.25" value={Math.round(zoom*4)/4} onChange={e=>setZoom(Number(e.target.value))}/>
       </div>
-      <button onClick={exportSvg}>Export floor plan SVG</button>
+      <div className="ip-exports"><button onClick={()=>exportBitmap('png')}>PNG</button><button onClick={()=>exportBitmap('jpg')}>JPG</button><button onClick={exportSvg}>SVG</button></div>
     </header>
     <div className="ip-workspace">
       <aside className="ip-panel">
