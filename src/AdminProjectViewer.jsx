@@ -56,7 +56,7 @@ export default function AdminProjectViewer({record,owner,onClose}){
         m.addSource('admin-tents',{type:'geojson',data:collection([])});
         m.addSource('admin-inside',{type:'geojson',data:collection([])});
         m.addSource('admin-inside-labels',{type:'geojson',data:collection([])});
-        for(const name of ['area','border','route','pins','labels'])
+        for(const name of ['area','border','route','corridor','pins','labels'])
           m.addSource('admin-logistics-'+name,{type:'geojson',data:collection([])});
         m.addLayer({id:'admin-tent-fill',type:'fill',source:'admin-tents',
           paint:{'fill-color':'#2dc6b4','fill-opacity':.25}});
@@ -73,6 +73,8 @@ export default function AdminProjectViewer({record,owner,onClose}){
           paint:{'fill-color':['get','color'],'fill-opacity':.25}});
         m.addLayer({id:'admin-logistics-border',type:'line',source:'admin-logistics-border',
           paint:{'line-color':['get','color'],'line-width':2}});
+        m.addLayer({id:'admin-logistics-corridor',type:'fill',source:'admin-logistics-corridor',
+          paint:{'fill-color':['get','color'],'fill-opacity':.19}});
         m.addLayer({id:'admin-logistics-route',type:'line',source:'admin-logistics-route',
           paint:{'line-color':['get','color'],'line-width':4,'line-dasharray':[3,1]}});
         m.addLayer({id:'admin-logistics-pins',type:'circle',source:'admin-logistics-pins',
@@ -100,7 +102,7 @@ export default function AdminProjectViewer({record,owner,onClose}){
       m.getSource('admin-inside').setData(showInterior?overlay.polygons:collection([]));
       m.getSource('admin-inside-labels').setData(showInterior?overlay.labels:collection([]));
       const zone=siteLogisticsGeoJSON(marks);
-      for(const name of ['area','border','route','pins','labels'])
+      for(const name of ['area','border','route','corridor','pins','labels'])
         m.getSource('admin-logistics-'+name)?.setData(showSiteLogistics?zone[name]:collection([]));
     }
     return ()=>{mapRef.current=null;m?.remove();};
@@ -116,7 +118,7 @@ export default function AdminProjectViewer({record,owner,onClose}){
     const m=mapRef.current;
     if(!m?.getSource('admin-logistics-area'))return;
     const zone=siteLogisticsGeoJSON(marks);
-    for(const name of ['area','border','route','pins','labels'])
+    for(const name of ['area','border','route','corridor','pins','labels'])
       m.getSource('admin-logistics-'+name)?.setData(showSiteLogistics?zone[name]:collection([]));
   },[showSiteLogistics,record]);
   function zoomToMark(item){
