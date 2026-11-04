@@ -66,3 +66,18 @@
 .history-controls button{min-height:38px;font-size:12px}
 .history-controls button:disabled{opacity:.38;cursor:not-allowed}
 .uds-cloud{scroll-margin-top:130px}
+
+/* V0.9: editable top bar and real-world layout orientation controls */
+.map-project-label{display:flex;align-items:center;gap:8px;flex:1;min-width:150px;margin:0}
+.map-project-name{font:inherit;font-size:inherit;font-weight:800;color:#f2faf9;background:transparent;border:1px solid transparent;border-radius:7px;padding:8px 10px;min-width:70px;width:100%;max-width:520px;text-overflow:ellipsis}
+.map-project-name:hover{background:#253a45;border-color:#54616a}
+.map-project-name:focus{background:#102630;border-color:#5dd8ca;outline:2px solid #5dd8ca;outline-offset:2px}
+.map-edit-icon{font-size:16px;color:#9ac5c4;flex-shrink:0}
+.site-layout-controls{border:1px solid #638577;background:#263d3e;border-radius:9px;padding:10px;margin:10px 0 13px}
+.site-layout-switch{font-weight:750!important;color:#e6fff9!important;font-size:12px!important;display:flex;align-items:center;gap:9px;line-height:1.4}
+.site-layout-switch input{width:17px!important;height:17px;flex-shrink:0;margin:0;accent-color:#25bfa8}
+.site-layout-controls .grid{margin:10px 0;gap:6px}
+.site-layout-controls .grid button{font-size:11px;padding:9px 5px;line-height:1.35}
+.site-layout-controls .grid button.active{background:#177a70;border-color:#67c9bc}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:650px){.map-project-name{font-size:13px;max-width:100%}.site-layout-controls .grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
