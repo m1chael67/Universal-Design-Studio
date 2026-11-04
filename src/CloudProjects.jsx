@@ -8,8 +8,8 @@ import './cloud.css';
 // Table permissions: CREATE to authenticated users only. Row Security ON.
 const APPWRITE_ENDPOINT='https://nyc.cloud.appwrite.io/v1';
 const APPWRITE_PROJECT='6aea8c410001e8aed9b1';
-const DATABASE_ID='design_studio';
-const TABLE_ID='projects';
+const DATABASE_ID='6aeb3dfa001293738040';
+const TABLE_ID='6aeb3e0500094b2a9ae4';
 const client=new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT);
 const account=new Account(client),tables=new TablesDB(client);
 
