@@ -38,3 +38,44 @@ test('seating alternatives stay in numeric tent coordinates',()=>{
     assert.ok(o.w>0&&o.h>0);
   }
 });
+
+test('custom table counts add the requested optional end chairs',()=>{
+  const opts={...settings,tableKey:'rect6',seatCounts:{rect6:8},maxTables:2};
+  const result=recommendSeating(empty(),30,50,opts);
+  for(const r of result){
+    assert.equal(r.seatsPerTable,8);
+    assert.equal(r.newChairs,r.tableCount*8);
+    assert.ok(r.tableCount<=2);
+    const seats=r.newObjects.filter(o=>o.type==='chair');
+    assert.ok(seats.every(o=>o.w===1.45&&o.h===1.45));
+  }
+});
+test('regular 6-foot tables use six chairs and 60-inch rounds use eight',()=>{
+  for(const [table,expected] of [['rect6',6],['round5',8]]){
+    const result=recommendSeating(empty(),30,50,{...settings,tableKey:table});
+    for(const r of result){
+      assert.equal(r.seatsPerTable,expected);
+      assert.equal(r.newChairs,r.tableCount*expected);
+    }
+  }
+});
+test('denser 60-inch rounds allow ten chairs',()=>{
+  const result=recommendSeating(empty(),30,50,{...settings,tableKey:'round5',seatCounts:{round5:10}});
+  for(const r of result){
+    assert.equal(r.seatsPerTable,10);
+    assert.equal(r.newChairs,r.tableCount*10);
+  }
+});
+test('wall spacing and table maximum are configurable',()=>{
+  const r=recommendSeating(empty(),25,60,{...settings,tableKey:'rect8',maxTables:3,spacingOffset:2,wallBuffer:2});
+  assert.equal(r.length,3);
+  for(const x of r) {
+    assert.ok(x.tableCount<=3);
+    assert.ok(x.aisleEstimate>=3.5);
+  }
+});
+test('stage stairs remain fixed while generating table seating',()=>{
+  const stairs={id:'stairs',catalog:'stairs',type:'stairs',x:8,y:8,w:3,h:4,rot:0};
+  const r=recommendSeating({objects:[stairs],doors:[]},30,45,{...settings,tableKey:'rect6'});
+  for(const x of r)assert.ok(x.baseObjects.some(o=>o.id===stairs.id));
+});
