@@ -21,7 +21,7 @@ export function logisticsDescription(item){
   if(t.kind==='area')return (polygonAreaFt2(item.points||[])).toFixed(0)+' sq ft';
   return 'Map pin';
 }
-export default function SiteLogisticsPanel({jumpToken,items,draft,selected,checklist={},onChecklistChange,onSelect,onStart,onFinish,onCancel,onBack,onChange,onRemove,onZoom}){
+export default function SiteLogisticsPanel({jumpToken,items,draft,selected,checklist={},onChecklistChange,onSelect,onStart,onFinish,onCancel,onBack,onChange,onRemove,onZoom,onFitAll}){
   const [open,setOpen]=useState(true);
   useEffect(()=>{if(jumpToken>0)setOpen(true);},[jumpToken]);
   const [category,setCategory]=useState('unload');
@@ -102,6 +102,7 @@ export default function SiteLogisticsPanel({jumpToken,items,draft,selected,check
           </div>}
         </div>)}
       </div>}
+      <button type="button" className="site-logistics-fit" onClick={onFitAll}>Fit all tents, parking & routes on map</button>
       <details className="site-readiness">
         <summary>Site readiness checklist — {LOGISTICS_CHECKS.filter(c=>checklist[c.id]).length}/{LOGISTICS_CHECKS.length} checked</summary>
         <p className="hint">A planning reminder, not proof that a condition is safe. Check each item after verifying it in the field.</p>
