@@ -122,7 +122,7 @@ function FoldSection({title,open,onToggle,children,count}){
     {open&&<div className="ip-fold-content">{children}</div>}
   </section>;
 }
-export default function InteriorPlanner({tent,onChange,onClose}){
+export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,canUndo,canRedo}){
   // Present the tent with its LENGTH across the top and its WIDTH on the side.
   const w=Number(tent.length)||40,h=Number(tent.width)||20;
   const layout=landscape(tent.interior,h);
@@ -498,6 +498,10 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     <header className="ip-header">
       <button className="ip-back" onClick={onClose}>← Back to site</button>
       <div className="ip-heading"><strong>{tent.name?.trim()||'Tent interior'}</strong><span>Width {h} ft (side) × Length {w} ft (top) · {fmt(w*h)} sq ft</span></div>
+      <div className="ip-history">
+        <button onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl/⌘+Z)">↶ Undo</button>
+        <button onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl/⌘+Shift+Z)">↷ Redo</button>
+      </div>
       <div className="ip-zoom">
         <button onClick={()=>setZoom(z=>cap(z/1.25,.25,12))} title="Zoom out">−</button>
         <span>{Math.round(zoom*100)}%</span>
