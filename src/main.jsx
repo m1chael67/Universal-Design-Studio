@@ -211,7 +211,7 @@ function App(){
       ctx.fillStyle='#ffffff';ctx.font='bold '+Math.round(16*scale)+'px sans-serif';
       ctx.fillText((project.name||'Site plan').slice(0,55),14*scale,source.height+25*scale,canvas.width-28*scale);
       const credits=(map.getContainer().querySelector('.mapboxgl-ctrl-attrib-inner')?.textContent||'© Mapbox © OpenStreetMap')
-        .replace(/Improve this map/gi,'').replace(/\\s+/g,' ').trim();
+        .replace(/Improve this map/gi,'').replace(/\s+/g,' ').trim();
       ctx.font=Math.round(11*scale)+'px sans-serif';ctx.fillStyle='#d4e0e5';
       ctx.fillText((credits+' • Planning concept; verify on site').slice(0,180),14*scale,source.height+50*scale,canvas.width-28*scale);
       // Include the official Mapbox logo asset if the browser exposes it through the control CSS.
@@ -219,7 +219,7 @@ function App(){
       if(logo){
         try{
           const bg=window.getComputedStyle(logo).backgroundImage;
-          const value=bg.match(/^url\\((.+)\\)$/)?.[1]?.replace(/^["']|["']$/g,'');
+          const value=bg.startsWith('url(') ? bg.slice(4,-1).replace(/^["']|["']$/g,'') : '';
           if(value){
             const logoImage=new Image();logoImage.crossOrigin='anonymous';
             await new Promise((resolve,reject)=>{logoImage.onload=resolve;logoImage.onerror=reject;logoImage.src=value;});
