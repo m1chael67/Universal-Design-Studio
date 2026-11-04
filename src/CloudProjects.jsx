@@ -221,8 +221,9 @@ export default function CloudProjects({project,measurement,onLoadProject}){
     a.href=u;a.download='universal-design-studio-backup.json';document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(u),1000);
   };
-  return <section className="uds-cloud">
-    <h3>Cloud projects</h3>
+  return <details className="uds-cloud sidebar-collapsible">
+    <summary>Cloud projects {user?'· '+(saveState==='saved'?'Saved':saveState==='pending'?'Saving…':saveState==='error'?'Save error':saveState==='conflict'?'Conflict':'Local only'):'· Sign in'}</summary>
+    <div className="sidebar-collapsible-body">
     {loading?<p className="cloud-note">Checking cloud session…</p>:!user?
       <div className="cloud-login">
         <p className="cloud-note">Sign in to keep designs available on every computer. Your current browser plan stays untouched.</p>
@@ -268,5 +269,6 @@ export default function CloudProjects({project,measurement,onLoadProject}){
       <a href="https://appwrite.io/projects/6aea8c410001e8aed9b1" target="_blank" rel="noreferrer">Open Appwrite console</a>
       <p className="cloud-note">Click Refresh cloud list after checking settings. If Create still fails, the red message above now includes Appwrite's exact error type and code.</p>
     </div>}
-  </section>;
+    </div>
+  </details>;
 }
