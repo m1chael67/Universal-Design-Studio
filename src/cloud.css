@@ -1,0 +1,31 @@
+.uds-cloud{background:#183640;border:1px solid #3d676c;border-radius:9px;margin:10px 12px;padding:12px!important}
+.uds-cloud h3{margin:0 0 8px!important;color:#d8f8f4!important;font-size:13px!important;text-transform:uppercase}
+.uds-cloud button{cursor:pointer}
+.uds-cloud button:disabled{opacity:.55;cursor:not-allowed}
+.cloud-login form{display:grid;gap:7px;margin:10px 0}
+.cloud-login form input{background:#0d1f27;border:1px solid #5f8085;color:#f7fcff;width:100%;border-radius:7px;padding:11px;font-size:13px;min-width:0}
+.cloud-login form button{padding:10px}
+.cloud-note{font-size:11px;line-height:1.55;color:#c2d5dc;margin:7px 0 9px}
+.cloud-account{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:12px;color:#edf7f8;min-width:0}
+.cloud-account span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.cloud-account button{padding:6px 9px;flex-shrink:0}
+.cloud-sync{display:flex;align-items:center;gap:7px;font-size:11px;margin:10px 0 8px;color:#e1f6eb}
+.cloud-dot{height:8px;width:8px;display:block;flex:0 0 8px;border-radius:100%;background:#a3aab0}
+.cloud-dot.cloud-saved{background:#36ceab}
+.cloud-dot.cloud-pending{background:#edc075}
+.cloud-dot.cloud-error,.cloud-dot.cloud-conflict{background:#f1837d}
+.cloud-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:10px 0}
+.cloud-actions button{padding:8px!important;min-width:0;font-size:11px!important;line-height:1.3}
+.cloud-actions button:first-child{grid-column:span 2}
+.cloud-list{max-height:210px;overflow:auto;padding-right:3px}
+.cloud-row{display:flex;gap:5px;align-items:stretch;margin:5px 0}
+.cloud-row>button:first-child{flex:1;min-width:0;display:flex;flex-direction:column;text-align:left;gap:4px;padding:9px!important;align-items:start;background:#23454e!important}
+.cloud-row.current>button:first-child{border-color:#58c6b5!important;background:#285950!important}
+.cloud-row strong{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.cloud-row small{font-size:10px;color:#b4cdd2}
+.cloud-row .cloud-delete{flex:0 0 31px;font-size:21px;padding:0!important;color:#ffd0ce;background:#4b3338!important}
+.cloud-error{font-size:11px;color:#ffe7dd;background:#5c383a;border:1px solid #bf797b;padding:9px;border-radius:7px;line-height:1.55;margin:9px 0}
+.cloud-setup{background:#354236;border:1px solid #829674;padding:11px;border-radius:8px;margin:12px 0;font-size:12px;line-height:1.65;color:#eaf8df}
+.cloud-setup p{margin:7px 0}
+.cloud-setup code{font-size:11px;background:#1d3025;padding:2px 4px;border-radius:4px}
+.cloud-setup a{color:#d7fff3;font-weight:700;text-decoration:underline}
