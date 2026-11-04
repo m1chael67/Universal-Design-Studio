@@ -302,30 +302,92 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     const y=(e.clientY-rect.top)/rect.height*(h+pad*2)-pad;
     return {x,y};
   }
+  function startMarquee(e){
+    if(mode!=='select'||e.button!==0||dragRef.current)return;
+    if(e.target.closest?.('.ip-item, .ip-door, .ip-measure-line'))return;
+    e.preventDefault();svgRef.current?.setPointerCapture(e.pointerId);
+    const start=toPoint(e);
+    dragRef.current={action:'marquee',start,additive:e.shiftKey};
+    setMarquee({start,end:start});
+  }
   function beginDrag(e,action,item){
     if(mode!=='select'||e.button!==0)return;
+    e.stopPropagation();e.preventDefault();
+    if(e.shiftKey&&action==='move'){
+      const ids=selectedIds.includes(item.id)?selectedIds.filter(x=>x!==item.id):[...selectedIds,item.id];
+      setSelectedIds(ids);setSelected(ids.length===1?ids[0]:null);
+      return;
+    }
+    const ids=action==='move'&&selectedIds.includes(item.id)&&selectedIds.length>1?selectedIds:[item.id];
+    setSelectedIds(ids);setSelected(ids.length===1?item.id:null);
+    svgRef.current?.setPointerCapture(e.pointerId);
+    dragRef.current={action,id:item.id,start:toPoint(e),original:item,
+      originals:layout.objects.filter(o=>ids.includes(o.id))};
+  }
+  function beginMeasureDrag(e,m,part){
+    if(mode!=='select'||e.button!==0)return;
     e.stopPropagation();e.preventDefault();svgRef.current?.setPointerCapture(e.pointerId);
-    setSelected(item.id);dragRef.current={action,id:item.id,start:toPoint(e),original:item};
+    setSelected('measure:'+m.id);setSelectedIds([]);
+    dragRef.current={action:'measure',id:m.id,start:toPoint(e),original:m,part};
+  }
+  function moveGroup(d,p){
+    const orig=d.originals;
+    if(!orig?.length)return;
+    const xs=orig.map(o=>o.x),ys=orig.map(o=>o.y);
+    const requestedX=snap?round(p.x-d.start.x,gridStep):p.x-d.start.x;
+    const requestedY=snap?round(p.y-d.start.y,gridStep):p.y-d.start.y;
+    const dx=cap(requestedX,-Math.min(...xs),w-Math.max(...xs));
+    const dy=cap(requestedY,-Math.min(...ys),h-Math.max(...ys));
+    const moved=new Map(orig.map(o=>[o.id,{x:Number((o.x+dx).toFixed(3)),y:Number((o.y+dy).toFixed(3))}]));
+    commit({objects:layout.objects.map(o=>moved.has(o.id)?{...o,...moved.get(o.id)}:o)});
   }
   function onMove(e){
     const p=toPoint(e);if(!p)return;
     if(dragRef.current){
       const d=dragRef.current;
-      if(d.action==='move'){
-        const x=d.original.x+p.x-d.start.x,y=d.original.y+p.y-d.start.y;
-        updateObject(d.id,{x:cap(snap?round(x,gridStep):x,0,w),y:cap(snap?round(y,gridStep):y,0,h)});
-      } else if(d.action==='rotate'){
+      if(d.action==='marquee'){
+        setMarquee({start:d.start,end:p});
+      }else if(d.action==='move')moveGroup(d,p);
+      else if(d.action==='rotate'){
         const degrees=(Math.atan2(p.y-d.original.y,p.x-d.original.x)*180/Math.PI+90+360)%360;
         updateObject(d.id,{rot:alignRotation(degrees,d.original)});
-      } else if(d.action==='door'){
+      }else if(d.action==='door'){
         const wall=d.original.wall;
-        updateDoor(d.id,{at:cap(snap?round(wall==='top'||wall==='bottom'?p.x:p.y,gridStep):(wall==='top'||wall==='bottom'?p.x:p.y),0,(wall==='top'||wall==='bottom'?w:h))});
+        const along=wall==='top'||wall==='bottom'?p.x:p.y;
+        const len=wall==='top'||wall==='bottom'?w:h;
+        updateDoor(d.id,{at:cap(snap?round(along,gridStep):along,0,len)});
+      }else if(d.action==='measure'){
+        const rawX=p.x-d.start.x,rawY=p.y-d.start.y;
+        const dx=snap?round(rawX,gridStep):rawX,dy=snap?round(rawY,gridStep):rawY;
+        const point=v=>({x:Number(cap(v.x+dx,0,w).toFixed(3)),y:Number(cap(v.y+dy,0,h).toFixed(3))});
+        updateMeasurement(d.id,d.part==='a'?{a:point(d.original.a)}:
+          d.part==='b'?{b:point(d.original.b)}:{a:point(d.original.a),b:point(d.original.b)});
       }
       return;
     }
     if(mode==='measure'&&measureStart)setMeasureHover({x:cap(p.x,0,w),y:cap(p.y,0,h)});
   }
-  function endDrag(e){dragRef.current=null;try{svgRef.current?.releasePointerCapture(e.pointerId);}catch{}}
+  function endDrag(e){
+    const d=dragRef.current;
+    if(d?.action==='marquee'){
+      const p=toPoint(e)||d.start;
+      const left=Math.min(d.start.x,p.x),right=Math.max(d.start.x,p.x);
+      const top=Math.min(d.start.y,p.y),bottom=Math.max(d.start.y,p.y);
+      if(Math.hypot(right-left,bottom-top)>.25){
+        const found=layout.objects.filter(o=>{
+          const rad=(o.rot||0)*Math.PI/180;
+          const halfW=(Math.abs(Math.cos(rad))*o.w+Math.abs(Math.sin(rad))*o.h)/2;
+          const halfH=(Math.abs(Math.sin(rad))*o.w+Math.abs(Math.cos(rad))*o.h)/2;
+          return o.x+halfW>=left&&o.x-halfW<=right&&o.y+halfH>=top&&o.y-halfH<=bottom;
+        }).map(o=>o.id);
+        const ids=d.additive?[...new Set([...selectedIds,...found])]:found;
+        setSelectedIds(ids);setSelected(ids.length===1?ids[0]:null);
+      }else if(!d.additive){setSelected(null);setSelectedIds([]);}
+      setMarquee(null);
+    }
+    dragRef.current=null;
+    try{svgRef.current?.releasePointerCapture(e.pointerId);}catch{}
+  }
   function canvasClick(e){
     if(mode!=='measure')return;
     const p=toPoint(e);if(!p)return;
@@ -337,10 +399,19 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   }
   const measureLine=(a,b,id,temporary=false)=>{
     const d=Math.hypot(a.x-b.x,a.y-b.y);
-    return <g key={id} pointerEvents="none">
-      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={temporary?'#ffda8c':'#ecf4f5'} strokeWidth=".17" strokeDasharray=".55,.25"/>
-      <circle cx={a.x} cy={a.y} r=".36" fill="#ffd57e"/><circle cx={b.x} cy={b.y} r=".36" fill="#ffd57e"/>
-      <text x={(a.x+b.x)/2} y={(a.y+b.y)/2-.65} fontSize=".83" textAnchor="middle" paintOrder="stroke" stroke="#21303e" strokeWidth=".55" fill="#fff">{fmt(d)} ft</text>
+    const active=selected==='measure:'+id;
+    const m=layout.measurements.find(m=>m.id===id);
+    return <g key={id} className={temporary?'':'ip-measure-line'} pointerEvents={temporary?'none':undefined}>
+      {!temporary&&m&&<line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth="1.5"
+        onPointerDown={e=>beginMeasureDrag(e,m,'all')}/>}
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={active?'#ffd58a':temporary?'#ffda8c':'#ecf4f5'}
+        strokeWidth={active?'.23':'.17'} strokeDasharray=".55,.25" pointerEvents="none"/>
+      <circle cx={a.x} cy={a.y} r={active?'.55':'.36'} fill={active?'#ffd58a':'#ffd57e'}
+        onPointerDown={temporary?undefined:e=>beginMeasureDrag(e,m,'a')}/>
+      <circle cx={b.x} cy={b.y} r={active?'.55':'.36'} fill={active?'#ffd58a':'#ffd57e'}
+        onPointerDown={temporary?undefined:e=>beginMeasureDrag(e,m,'b')}/>
+      <text x={(a.x+b.x)/2} y={(a.y+b.y)/2-.65} fontSize=".83" textAnchor="middle" paintOrder="stroke" stroke="#21303e"
+        strokeWidth=".55" fill="#fff" pointerEvents="none">{fmt(d)} ft</text>
     </g>;
   };
   function serializedDrawing(){
