@@ -210,13 +210,31 @@ function addFurniture(root,layout,length,width){
         cube(group,w/columns-.025,.12,d/rows-.025,-w/2+w*(ix+.5)/columns,.1,-d/2+d*(iz+.5)/rows,
           (ix+iz)%2?0xddd3d4:0xb39faf);
     }else if(type==='stage'){
-      cube(group,w,.26,d,0,2.25,0,0xb08d60);
-      legs(group,w,d,2.12);
+      // Modular 4 × 4 ft black stage decks; the saved height is deck-top height.
+      const deckHeight=clamp((Number(o.heightInches)||16)/12,.333,6);
+      const deckThickness=.12;
+      const columns=Math.max(1,Math.round(w/4)),rows=Math.max(1,Math.round(d/4));
+      for(let ix=0;ix<columns;ix++)for(let iz=0;iz<rows;iz++){
+        const cw=w/columns,cd=d/rows;
+        const cx=-w/2+(ix+.5)*cw,cz=-d/2+(iz+.5)*cd;
+        cube(group,cw-.025,deckThickness,cd-.025,cx,deckHeight-deckThickness/2,cz,0x17191d);
+        // Separate under-deck frame and support legs on every module.
+        for(const zz of [-cd*.38,cd*.38]){
+          cube(group,cw*.88,.055,.065,cx,deckHeight-.18,cz+zz,0x555b60);
+        }
+        for(const xx of [-cw*.39,cw*.39])for(const zz of [-cd*.39,cd*.39]){
+          cube(group,.075,Math.max(.1,deckHeight-.17),.075,cx+xx,(deckHeight-.17)/2,cz+zz,0x6b7073);
+        }
+      }
     }else if(type==='stairs'){
-      const run=Math.max(.2,d/3);
-      for(let i=0;i<3;i++){
-        const h=.5*(i+1);
-        cube(group,w,h,run,0,h/2,-d/2+run*(i+.5),0xbfa684);
+      // The near (-Z) edge is the HIGH end, matching the TOP / STAGE marker in 2D.
+      const topHeight=clamp((Number(o.heightInches)||16)/12,.333,6);
+      const stepCount=Math.max(2,Math.ceil(topHeight/.58));
+      const treadRun=d/stepCount;
+      for(let i=0;i<stepCount;i++){
+        const stepHeight=topHeight*(stepCount-i)/stepCount;
+        cube(group,w-.05,stepHeight,treadRun-.02,0,stepHeight/2,-d/2+(i+.5)*treadRun,0x393b3e);
+        cube(group,w-.05,.06,treadRun-.02,0,stepHeight,-d/2+(i+.5)*treadRun,0x17191c);
       }
     }else if(type==='bar'){
       cube(group,w,.24,d,0,3.4,0,0x90a971);
