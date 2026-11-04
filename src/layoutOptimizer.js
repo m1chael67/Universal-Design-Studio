@@ -10,7 +10,7 @@ const LEVELS=[
   {key:'balanced',name:'Balanced',gap:3.5,edge:1.5,description:'Practical compromise between seats and circulation'},
   {key:'maximum',name:'Maximum capacity',gap:1.5,edge:0.75,description:'Tight conceptual fit; check aisles, exits and local occupancy rules'}
 ];
-const seatTypes=new Set(['chair','round','table']);
+// Seats per table can be overridden; optional extras go at rectangular table ends.
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 const id=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():('gen-'+Date.now()+'-'+Math.random().toString(36).slice(2));
 const rect=(x,y,w,h)=>({left:x-w/2,right:x+w/2,top:y-h/2,bottom:y+h/2});
@@ -20,7 +20,7 @@ const bbox=o=>{
   return rect(o.x,o.y,cos*(o.w||1)+sin*(o.h||1),sin*(o.w||1)+cos*(o.h||1));
 };
 const isSeating=o=>o.type==='chair'||((o.type==='round'||o.type==='table')&&o.catalog!=='cocktail');
-const clusterSize=t=>t.type==='round'?{w:t.w+4.6,h:t.h+4.6}:{w:t.w+1.5,h:t.h+4.4};
+const clusterSize=t=>t.type==='round'?{w:t.w+4.3,h:t.h+4.3}:{w:t.w+(t.seats>(t.w===6?6:8)?3.4:1.4),h:t.h+4.1};
 const normObjects=o=>(Array.isArray(o)?o:[]).filter(x=>Number.isFinite(x.x)&&Number.isFinite(x.y)&&Number.isFinite(x.w)&&Number.isFinite(x.h));
 function doorReservation(d,width,length){
   const vertical=d.wall==='left'||d.wall==='right',wallLen=vertical?width:length;
@@ -44,7 +44,7 @@ function buildCluster(t,x,y,chairKey,tableRotation=0){
     const p=turn(dx,dy);
     objects.push({id:id(),catalog:chairKey,type:'chair',
       label:chairKey==='chiavari'?'Chiavari chair':'Folding chair',
-      x:Number(p.x.toFixed(3)),y:Number(p.y.toFixed(3)),w:1.65,h:1.65,
+      x:Number(p.x.toFixed(3)),y:Number(p.y.toFixed(3)),w:1.45,h:1.45,
       rot:((rotation+tableRotation)%360+360)%360,generatedBy:'optimizer'});
   }
   if(t.type==='round'){
@@ -54,36 +54,42 @@ function buildCluster(t,x,y,chairKey,tableRotation=0){
       chair(radius*Math.cos(theta),radius*Math.sin(theta),theta*180/Math.PI+90);
     }
   }else{
-    const each=t.seats/2,offset=t.h/2+1.05;
+    const regular=t.w<=6?6:8,extras=t.seats>regular?2:0,each=(t.seats-extras)/2,offset=t.h/2+1;
     for(let i=0;i<each;i++){
       const tx=-t.w/2+(i+1)*t.w/(each+1);
       chair(tx,-offset,0);chair(tx,offset,180);
     }
+    if(extras){
+      chair(-t.w/2-1.1,0,270);
+      chair(t.w/2+1.1,0,90);
+    }
   }
   return objects;
 }
-function tryTable(t,level,layout,width,length,chairKey,mode){
+function tryTable(t,level,layout,width,length,chairKey,mode,opts){
   const old=normObjects(layout.objects),base=mode==='replace'?old.filter(o=>!isSeating(o)):old;
   const obstacleRects=base.map(o=>fixtureClearance(o,level));
   for(const door of layout.doors||[])obstacleRects.push(doorReservation(door,width,length));
+  const gap=Math.max(0,level.gap+opts.spacingOffset);
+  const edge=Math.max(0,level.edge+opts.wallBuffer);
   let best={centers:[],angle:0,dims:clusterSize(t)};
   for(const angle of t.type==='table'?[0,90]:[0]){
     const raw=clusterSize(t),dims=angle===90?{w:raw.h,h:raw.w}:raw;
-    const stepX=dims.w+level.gap,stepY=dims.h+level.gap;
-    const xStart=level.edge+dims.w/2,yStart=level.edge+dims.h/2;
+    const stepX=dims.w+gap,stepY=dims.h+gap;
+    const xStart=edge+dims.w/2,yStart=edge+dims.h/2;
     for(const stagger of [false,true]){
       for(const xPhase of [0,.25,.5]){
         for(const yPhase of [0,.25,.5]){
           const found=[],bounds=[];
-          for(let y=yStart+yPhase*stepY,row=0;y<=width-level.edge-dims.h/2+.0001;y+=stepY,row++){
-            for(let x=xStart+xPhase*stepX+(stagger&&row%2?stepX/2:0);x<=length-level.edge-dims.w/2+.0001;x+=stepX){
+          for(let y=yStart+yPhase*stepY,row=0;y<=width-edge-dims.h/2+.0001;y+=stepY,row++){
+            for(let x=xStart+xPhase*stepX+(stagger&&row%2?stepX/2:0);x<=length-edge-dims.w/2+.0001;x+=stepX){
               const r=rect(x,y,dims.w,dims.h);
-              if(obstacleRects.some(b=>overlaps(r,b,level.gap/3)))continue;
-              if(bounds.some(b=>overlaps(r,b,level.gap-.01)))continue;
+              if(obstacleRects.some(b=>overlaps(r,b,gap/3)))continue;
+              if(bounds.some(b=>overlaps(r,b,gap-.01)))continue;
               bounds.push(r);found.push([x,y]);
-              if(found.length>=80)break;
+              if(found.length>=opts.maxTables)break;
             }
-            if(found.length>=80)break;
+            if(found.length>=opts.maxTables)break;
           }
           if(found.length>best.centers.length)best={centers:found,angle,dims};
         }
@@ -96,20 +102,30 @@ function tryTable(t,level,layout,width,length,chairKey,mode){
   const seatArea=best.centers.length*best.dims.w*best.dims.h;
   return {
     key:level.key,name:level.name,description:level.description,tableName:t.name,
-    aisleEstimate:level.gap,tableKey:t.key,tableCount:best.centers.length,
+    aisleEstimate:gap,tableKey:t.key,tableCount:best.centers.length,seatsPerTable:t.seats,
     newChairs,existingChairs,totalSeats:existingChairs+newChairs,
     tableAngle:best.angle,
     estimatedUsage:Math.round(Math.min(100,seatArea/Math.max(1,width*length)*100)),
     baseObjects:base,newObjects:created,mode
   };
 }
-export function recommendSeating(layout,width,length,{tableKey='auto',mode='replace',chairKey='folding'}={}){
-  const requested=TABLES.filter(t=>tableKey==='auto'||t.key===tableKey);
+export function recommendSeating(layout,width,length,{tableKey='auto',mode='replace',chairKey='folding',
+  seatCounts={},spacingOffset=0,wallBuffer=0,maxTables=80}={}){
+  const opts={
+    spacingOffset:clamp(Number(spacingOffset)||0,-1,12),
+    wallBuffer:clamp(Number(wallBuffer)||0,0,10),
+    maxTables:Math.max(1,Math.min(80,Math.floor(Number(maxTables)||80)))
+  };
+  const seatChoices={round5:[8,10],round6:[10,12],rect6:[6,8],rect8:[8,10]};
+  const requested=TABLES.filter(t=>tableKey==='auto'||t.key===tableKey).map(t=>({
+    ...t,seats:seatChoices[t.key].includes(Number(seatCounts[t.key]))?Number(seatCounts[t.key]):t.seats
+  }));
   if(!requested.length||!Number.isFinite(width)||!Number.isFinite(length))return [];
   return LEVELS.map(level=>{
-    const candidates=requested.map(t=>tryTable(t,level,layout,width,length,chairKey,mode));
+    const candidates=requested.map(t=>tryTable(t,level,layout,width,length,chairKey,mode,opts));
     candidates.sort((a,b)=>b.totalSeats-a.totalSeats||b.tableCount-a.tableCount||a.estimatedUsage-b.estimatedUsage);
     return candidates[0];
   });
 }
 export const SEATING_TABLE_OPTIONS=TABLES.map(({key,name,seats})=>({key,name,seats}));
+export const SEAT_COUNT_CHOICES={round5:[8,10],round6:[10,12],rect6:[6,8],rect8:[8,10]};
