@@ -23,12 +23,14 @@ function parseRow(row){
 }
 function messageFor(error){
   const msg=String(error?.message||error||'Unknown error');
+  const detail=[error?.code,error?.type].filter(Boolean).join(' / ');
+  const withDetail=value=>detail?value+' ('+detail+')':value;
   if(error?.code===404||/database_not_found|table_not_found|collection_not_found/i.test(msg))
-    return 'Cloud database/table not configured yet. Follow the one-time Appwrite setup below.';
-  if(error?.code===401)return 'Not authorized. Check that row-level permissions are enabled and you are signed in.';
-  if(error?.code===403)return 'Permission denied. Check the table CREATE role and private row permissions.';
-  if(error?.code===400)return 'Appwrite rejected this save. Confirm the columns name, ownerId and payload are present and have the required types.';
-  return msg.length>220?msg.slice(0,220)+'…':msg;
+    return withDetail('Appwrite could not find or access the projects table. The database and table IDs are configured; check project, table security and this exact server error: '+msg);
+  if(error?.code===401)return withDetail('Not authorized. Check that row-level permissions are enabled and you are signed in. '+msg);
+  if(error?.code===403)return withDetail('Permission denied. Check table CREATE permission and private row permissions. '+msg);
+  if(error?.code===400)return withDetail('Appwrite rejected this request. Check columns and table settings. '+msg);
+  return withDetail(msg.length>240?msg.slice(0,240)+'…':msg);
 }
 function rowPermissions(userId){
   const u=Role.user(userId);
@@ -93,8 +95,10 @@ export default function CloudProjects({project,measurement,onLoadProject}){
         activate(results[0],parseRow(results[0]),true);
       }
     }catch(err){
-      setError(messageFor(err));
-      setTableMissing(err.code===404||/not configured/i.test(messageFor(err)));
+      setError('Cloud list unavailable: '+messageFor(err)+' You can still try “Save current plan as new cloud project.”');
+      // A 404 can also indicate an access problem; do not prevent creating
+      // a private row just because listing failed.
+      setTableMissing(false);
     }
   }
   useEffect(()=>{
@@ -182,7 +186,7 @@ export default function CloudProjects({project,measurement,onLoadProject}){
       activate(newRow,payload,payload!==latestPayload.current);
       setTableMissing(false);return true;
     }catch(err){
-      setError(messageFor(err));setTableMissing(err.code===404);return false;
+      setError('Creating cloud project failed: '+messageFor(err));setTableMissing(err.code===404);return false;
     }finally{setBusy(false);}
   }
   async function openCloud(row){
@@ -235,14 +239,15 @@ export default function CloudProjects({project,measurement,onLoadProject}){
           {saveState==='saved'?'Cloud saved':saveState==='pending'?'Saving changes…':saveState==='conflict'?'Cloud conflict — save as copy':saveState==='error'?'Cloud save failed':'Current plan is local only'}
         </div>
         <div className="cloud-actions">
-          <button className="primary" disabled={busy||tableMissing} onClick={()=>createCloudCopy()}>
+          <button className="primary" disabled={busy} onClick={()=>createCloudCopy()}>
             Save current plan as new cloud project
           </button>
           {linked&&<button disabled={busy||saveState==='conflict'} onClick={saveNow}>Save now</button>}
-          <button disabled={busy||tableMissing} onClick={()=>createCloudCopy({...initialProject(),name:'New site plan'})}>New blank cloud project</button>
+          <button disabled={busy} onClick={()=>createCloudCopy({...initialProject(),name:'New site plan'})}>New blank cloud project</button>
           <button onClick={backup}>Backup JSON</button>
           <button disabled={busy} onClick={async()=>{try{await refresh(user);}catch(err){setError(messageFor(err));}}}>Refresh cloud list</button>
         </div>
+        <p className="cloud-note">Database connected to IDs <code>{DATABASE_ID}</code> / <code>{TABLE_ID}</code>. Your account was created automatically when you registered here.</p>
         <div className="cloud-list">
           {rows.map(row=><div className={'cloud-row '+(activeId===row.$id?'current':'')} key={row.$id}>
             <button onClick={()=>openCloud(row)} title="Open project">
@@ -256,10 +261,10 @@ export default function CloudProjects({project,measurement,onLoadProject}){
     {error&&<div className="cloud-error" role="alert">{error}</div>}
     {tableMissing&&<div className="cloud-setup">
       <strong>One-time cloud setup needed</strong>
-      <p>In Appwrite's separate Universal Design Studio project, create database <code>design_studio</code>, table <code>projects</code> with row security ON.</p>
+      <p>Your existing database is <code>{DATABASE_ID}</code> and table is <code>{TABLE_ID}</code>. Confirm these exist and Row Security is ON. Do not create a second copy.</p>
       <p>Add required columns <code>name</code> (varchar, 256), <code>ownerId</code> (varchar, 64), and <code>payload</code> (mediumtext). Give the table CREATE permission to authenticated users only; don't grant table READ, UPDATE, or DELETE.</p>
       <a href="https://appwrite.io/projects/6aea8c410001e8aed9b1" target="_blank" rel="noreferrer">Open Appwrite console</a>
-      <p className="cloud-note">Then press Refresh cloud list. All cloud rows are private to their account.</p>
+      <p className="cloud-note">Click Refresh cloud list after checking settings. If Create still fails, the red message above now includes Appwrite's exact error type and code.</p>
     </div>}
   </section>;
 }
