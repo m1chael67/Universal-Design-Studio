@@ -11,7 +11,8 @@
   "dependencies": {
     "mapbox-gl": "^3.16.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "appwrite": "^29.0.0"
   },
   "devDependencies": {
     "vite": "^7.1.0"
