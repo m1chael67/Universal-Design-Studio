@@ -77,7 +77,10 @@ function XYField({label,value,min=0,max=2000,step=0.25,onCommit}){
   return <label className="ip-field">{label}<input ref={ref} type="number" step={step} min={min} max={max} value={raw} onChange={e=>setRaw(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==='Enter'&&e.currentTarget.blur()}/></label>;
 }
 function ItemShape({item,selected,press,outside,showHandle=true,stageLink=null}){
-  const {w,h,type}=item,clr=(CATALOG.find(c=>c.key===item.catalog)?.color)||'#b2c0c9';
+  const {w,h,type}=item;
+  // Intentionally keep the floor-plan stage gold regardless of the saved
+  // catalog/color from previous builds. Black panels are 3D-only.
+  const clr=type==='stage'?'#e7b66c':(CATALOG.find(c=>c.key===item.catalog)?.color)||'#b2c0c9';
   const rounded=type==='round';
   const outline=outside?'#ff796d':selected?'#ffda8b':'#e8f5f8';
   const number=n=>Number.isInteger(Number(n))?String(n):Number(n).toFixed(1);
