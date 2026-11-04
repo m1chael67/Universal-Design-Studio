@@ -14,10 +14,20 @@ export function buildReportHtml({project,mapImage,kind,notes}){
   const totalArea=tents.reduce((n,t)=>n+(Number(t.width)||0)*(Number(t.length)||0),0);
   const rows=tents.map((t,i)=>'<tr><td>'+esc(nameOf(t))+'</td><td>'+size(t.width)+' × '+size(t.length)+' ft</td><td>'+Math.round((Number(t.width)||0)*(Number(t.length)||0)).toLocaleString()+' ft²</td><td>'+esc((t.interior?.objects||[]).length)+' furnishings</td></tr>').join('');
   const logisticsRows=logistics.map(l=>'<li><strong>'+esc(l.label||l.type||'Site note')+'</strong> — '+esc(l.notes||l.description||'')+'</li>').join('');
-  const annotated=photo?'<section class="page"><h2>Site reference photograph</h2><img class="photo" src="'+photo+'" alt="Site reference photograph"/><p>Photo annotations are preserved in the editable project. Export the marked photo PNG separately to include annotations as a flattened image.</p></section>':'';
+  const marks=Array.isArray(project.sitePhoto?.annotations)?project.sitePhoto.annotations.slice(0,120):[];
+  const safeN=n=>Math.max(0,Math.min(1000,Number.isFinite(Number(n))?Number(n)*1000:0));
+  const markup=marks.map(a=>{
+    const x=safeN(a.x),y=safeN(a.y),x2=safeN(a.x2),y2=safeN(a.y2);
+    const color=/^#[0-9a-f]{6}$/i.test(a.color||'')?a.color:'#ffe083';
+    if(a.type==='box')return '<rect x="'+Math.min(x,x2)+'" y="'+Math.min(y,y2)+'" width="'+Math.abs(x2-x)+'" height="'+Math.abs(y2-y)+'" stroke="'+color+'" stroke-width="6" fill="#56dccb33"/>';
+    if(a.type==='arrow')return '<line x1="'+x+'" y1="'+y+'" x2="'+x2+'" y2="'+y2+'" stroke="'+color+'" stroke-width="9"/>';
+    return '<g><circle cx="'+x+'" cy="'+y+'" r="15" fill="'+color+'" stroke="#16323c" stroke-width="5"/><text x="'+(x+22)+'" y="'+(y-20)+'" font-size="34" font-weight="700" fill="white" stroke="#16323c" stroke-width="6" paint-order="stroke">'+esc(a.text||'Mark')+'</text></g>';
+  }).join('');
+  const aspect=(Number(project.sitePhoto?.photo?.width)||1600)/(Number(project.sitePhoto?.photo?.height)||900);
+  const annotated=photo?'<section class="page"><h2>Site reference photograph & annotations</h2><div class="photo-stage" style="aspect-ratio:'+Math.max(.2,Math.min(6,aspect))+'"><img class="photo" src="'+photo+'" alt="Site reference photograph"/><svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="Site photo annotations">'+markup+'</svg></div><p>Photo and planning marks are included for site reference.</p></section>':'';
   const title=kind==='customer'?'Customer site design proposal':'Crew site setup & logistics';
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>'+esc(project.name)+' — '+title+'</title><style>'+
-  '@page{size:letter;margin:.65in}*{box-sizing:border-box}body{font:13px Arial,sans-serif;color:#1b2a32;margin:0}header{border-bottom:5px solid #147d76;padding-bottom:16px;margin-bottom:18px;display:flex;align-items:center;gap:18px}header img{width:75px;height:75px;object-fit:contain}h1{font-size:23px;margin:0 0 5px}h2{font-size:17px;color:#145e60;margin:22px 0 10px}p{line-height:1.55}small,.muted{color:#667985}table{width:100%;border-collapse:collapse;margin-top:10px}td,th{padding:9px;border-bottom:1px solid #d5e0e3;text-align:left}th{background:#eaf3f3}img.map{width:100%;max-height:5.7in;object-fit:contain;border:1px solid #c9d5d8}img.photo{width:100%;max-height:8in;object-fit:contain}section.page{break-before:page}ul{padding-left:20px;line-height:1.7}.notice{border-left:4px solid #147d76;background:#eaf3f3;padding:11px;margin:16px 0}.stats{display:flex;gap:25px;font-size:14px}.stats b{font-size:20px;display:block}.print-controls{padding:10px;background:#e5f2f0;text-align:center}@media print{.print-controls{display:none}}'+
+  '@page{size:letter;margin:.65in}*{box-sizing:border-box}body{font:13px Arial,sans-serif;color:#1b2a32;margin:0}header{border-bottom:5px solid #147d76;padding-bottom:16px;margin-bottom:18px;display:flex;align-items:center;gap:18px}header img{width:75px;height:75px;object-fit:contain}h1{font-size:23px;margin:0 0 5px}h2{font-size:17px;color:#145e60;margin:22px 0 10px}p{line-height:1.55}small,.muted{color:#667985}table{width:100%;border-collapse:collapse;margin-top:10px}td,th{padding:9px;border-bottom:1px solid #d5e0e3;text-align:left}th{background:#eaf3f3}img.map{width:100%;max-height:5.7in;object-fit:contain;border:1px solid #c9d5d8}img.photo{width:100%;height:100%;object-fit:fill;display:block}.photo-stage{position:relative;width:100%;max-height:8in;overflow:hidden}.photo-stage svg{position:absolute;inset:0;width:100%;height:100%}section.page{break-before:page}ul{padding-left:20px;line-height:1.7}.notice{border-left:4px solid #147d76;background:#eaf3f3;padding:11px;margin:16px 0}.stats{display:flex;gap:25px;font-size:14px}.stats b{font-size:20px;display:block}.print-controls{padding:10px;background:#e5f2f0;text-align:center}@media print{.print-controls{display:none}}'+
   '</style></head><body><div class="print-controls"><button onclick="window.print()">Print / Save as PDF</button> &nbsp; Close this tab when finished</div>'+
   '<header><img src="/universal-crew-logo.jpg" alt="Universal Rentals logo"><div><h1>'+esc(project.name||'Site plan')+'</h1><strong>UNIVERSAL RENTALS & EVENTS</strong><p>'+title+' · '+esc(fmtDate())+'</p></div></header>'+
   '<div class="stats"><div><b>'+tents.length+'</b>visible tents</div><div><b>'+Math.round(totalArea).toLocaleString()+'</b>square feet of tent footprint</div></div>'+
@@ -54,7 +64,7 @@ export default function ReportsPanel({project,mapRef}){
       </select></label>
       <label>Additional instructions<textarea rows={4} maxLength={2500} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Parking, contact, access times, special instructions…"/></label>
       <button className="primary" onClick={generate}>Generate printable report</button>
-      <p className="hint">Includes the uploaded site photo if present. For a marked photo, export its annotated PNG from Site Photo Markup.</p>
+      <p className="hint">Includes the uploaded site photo and its markers, arrows and outlined areas when present.</p>
       {message&&<p role="status" className="hint">{message}</p>}
     </div>
   </details>;
