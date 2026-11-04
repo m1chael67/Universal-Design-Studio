@@ -10,12 +10,23 @@ function box(scene,w,h,d,x,y,z,col,rot=0){
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material(col));
   mesh.position.set(x,y,z);mesh.rotation.y=-rot*Math.PI/180;mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);return mesh;
 }
-function addTent(scene,tent,{roof,sidewalls,showFurniture}){
+function addTent(scene,tent,{roof,sidewalls,showFurniture,roofStyle='gable',legHeight=9,baySpacing=20}){
   const width=Math.max(2,Math.min(250,num(tent.length,40))),depth=Math.max(2,Math.min(250,num(tent.width,20)));
-  const eave=Math.min(18,Math.max(7,depth*.4)),ridge=eave+Math.min(16,depth*.3);
-  const poles=[[-width/2,-depth/2],[-width/2,depth/2],[width/2,-depth/2],[width/2,depth/2]];
+  const eave=Math.max(6,Math.min(16,num(legHeight,9)));
+  const ridge=eave+(roofStyle==='flat'?0:Math.min(18,depth*(roofStyle==='highpeak'?.5:.28)));
+  const bays=Math.max(1,Math.ceil(width/Math.max(5,num(baySpacing,20))));
   const white=0xe7e9e6;
-  for(const [x,z] of poles)box(scene,.18,eave,.18,x,eave/2,z,0x87989c);
+  for(let bay=0;bay<=bays;bay++){
+    const x=-width/2+width*bay/bays;
+    for(const z of [-depth/2,depth/2])box(scene,.18,eave,.18,x,eave/2,z,0x87989c);
+    if(roofStyle!=='flat'){
+      const rafter=new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x,eave,-depth/2),new THREE.Vector3(x,ridge,0),new THREE.Vector3(x,eave,depth/2)
+      ]);
+      const lines=new THREE.Line(rafter,new THREE.LineBasicMaterial({color:0x82989c}));
+      scene.add(lines);
+    }
+  }
   const geometry=new THREE.BufferGeometry();
   const vertices=[
     -width/2,eave,-depth/2, width/2,eave,-depth/2, width/2,ridge,0,
@@ -26,7 +37,7 @@ function addTent(scene,tent,{roof,sidewalls,showFurniture}){
   geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();
   const roofMesh=new THREE.Mesh(geometry,material(white,roof?.opacity??.88));
   roofMesh.visible=roof?.visible!==false;roofMesh.castShadow=true;scene.add(roofMesh);
-  const ridgeBeam=box(scene,width,.12,.12,0,ridge,0,0xb3bfc2);
+  box(scene,width,.12,.12,0,ridge,0,0xb3bfc2);
   if(sidewalls){
     const sides=tent.interior?.sidewalls||{};
     const wallMat=material(0xf2f4f1,.6);
@@ -72,7 +83,8 @@ function addTent(scene,tent,{roof,sidewalls,showFurniture}){
 export default function ThreeDViewer({tents,onClose}){
   const mount=useRef(null),renderRef=useRef(null);
   const [index,setIndex]=useState(0),[roofVisible,setRoofVisible]=useState(true),[wallVisible,setWallVisible]=useState(true),
-    [furnitureVisible,setFurnitureVisible]=useState(true),[error,setError]=useState('');
+    [furnitureVisible,setFurnitureVisible]=useState(true),[roofStyle,setRoofStyle]=useState('gable'),
+    [legHeight,setLegHeight]=useState(9),[baySpacing,setBaySpacing]=useState(20),[error,setError]=useState('');
   const choices=(tents||[]).filter(t=>!t.hidden);
   const tent=choices[Math.min(index,Math.max(0,choices.length-1))];
   useEffect(()=>{
@@ -102,7 +114,7 @@ export default function ThreeDViewer({tents,onClose}){
       ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
       const grid=new THREE.GridHelper(radius*2,Math.max(10,Math.min(100,Math.round(radius))),0x7b9a92,0x567468);
       grid.position.y=.025;scene.add(grid);
-      addTent(scene,tent,{roof:{visible:roofVisible,opacity:.9},sidewalls:wallVisible,showFurniture:furnitureVisible});
+      addTent(scene,tent,{roof:{visible:roofVisible,opacity:.9},sidewalls:wallVisible,showFurniture:furnitureVisible,roofStyle,legHeight,baySpacing});
       const resize=()=>{const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);};
       observer=new ResizeObserver(resize);observer.observe(host);resize();
       const animate=()=>{frame=requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);};
@@ -111,7 +123,7 @@ export default function ThreeDViewer({tents,onClose}){
       setError('');
     }catch(e){setError('3D rendering is unavailable on this device: '+(e.message||e));}
     return ()=>{cancelAnimationFrame(frame);observer?.disconnect();controls?.dispose();scene?.traverse(obj=>{obj.geometry?.dispose();if(obj.material){const mats=Array.isArray(obj.material)?obj.material:[obj.material];mats.forEach(m=>m.dispose());}});renderer?.dispose();renderer?.domElement?.remove();renderRef.current=null;};
-  },[tent,roofVisible,wallVisible,furnitureVisible]);
+  },[tent,roofVisible,wallVisible,furnitureVisible,roofStyle,legHeight,baySpacing]);
   useEffect(()=>{const onKey=e=>{if(e.key==='Escape')onClose();};window.addEventListener('keydown',onKey);return ()=>window.removeEventListener('keydown',onKey);},[onClose]);
   return <div className="three-d-backdrop" role="dialog" aria-modal="true" aria-label="Interactive 3D tent preview">
     <div className="three-d-shell">
@@ -119,6 +131,15 @@ export default function ThreeDViewer({tents,onClose}){
       <div className="three-d-tools">
         <label>Tent<select value={Math.min(index,choices.length-1)} onChange={e=>setIndex(Number(e.target.value))}>
           {choices.map((t,i)=><option key={t.id||i} value={i}>{t.name||'Tent '+(i+1)} · {t.width} × {t.length} ft</option>)}
+        </select></label>
+        <label>Roof shape<select value={roofStyle} onChange={e=>setRoofStyle(e.target.value)}>
+          <option value="gable">Standard gable</option><option value="highpeak">High peak</option><option value="flat">Flat canopy</option>
+        </select></label>
+        <label>Leg height<select value={legHeight} onChange={e=>setLegHeight(Number(e.target.value))}>
+          <option value="8">8 ft</option><option value="9">9 ft</option><option value="10">10 ft</option><option value="12">12 ft</option>
+        </select></label>
+        <label>Frame spacing<select value={baySpacing} onChange={e=>setBaySpacing(Number(e.target.value))}>
+          <option value="10">10 ft</option><option value="15">15 ft</option><option value="20">20 ft</option>
         </select></label>
         <label><input type="checkbox" checked={roofVisible} onChange={e=>setRoofVisible(e.target.checked)}/> Roof</label>
         <label><input type="checkbox" checked={wallVisible} onChange={e=>setWallVisible(e.target.checked)}/> Sidewalls</label>
