@@ -26,3 +26,8 @@
 .three-d-shell footer{padding:10px 16px;font-size:11px;color:#b5c8cc;border-top:1px solid #3d5660;flex-shrink:0}
 .three-d-shell footer p{margin:2px 0}
 @media(max-width:640px){.three-d-backdrop{padding:0}.three-d-shell{height:100%;border-radius:0}.three-d-tools{gap:7px;padding:8px}.three-d-tools label:first-child{width:100%;flex:auto}.three-d-tools label:first-child select{width:100%}.three-d-tools select{max-width:135px}.three-d-actions{padding:7px;gap:5px}.three-d-actions button{flex:1;min-width:75px;padding:7px}.three-d-actions button:last-child{flex-basis:100%;margin:0}.three-d-shell footer{padding:7px 10px}.three-d-metrics{font-size:11px}}
+
+.three-d-walk{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:7px 16px;background:#17333b;border-bottom:1px solid #3d5660}
+.three-d-walk button{font-size:12px;min-height:36px}
+.three-d-walk small{font-size:11px;color:#b9d3d3;margin-left:auto}
+@media(max-width:640px){.three-d-walk{padding:7px;gap:4px}.three-d-walk button{flex:1;padding:5px;font-size:11px}.three-d-walk small{width:100%;text-align:center}}
