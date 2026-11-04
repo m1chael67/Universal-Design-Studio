@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {Account,Client,ID,Permission,Query,Role,TablesDB} from 'appwrite';
 import './cloud.css';
+import AdminPanel from './AdminPanel.jsx';
 
 // Public Appwrite project details only. Never put an API key into a browser app.
 // CLOUD SETUP (console-only): database "design_studio", table "projects",
@@ -234,6 +235,7 @@ export default function CloudProjects({project,measurement,onLoadProject}){
         <p className="cloud-note">This is a separate Design Studio sign-in, not your crew-app PIN.</p>
       </div>:<div>
         <div className="cloud-account"><span title={user.email}>{user.email}</span><button disabled={busy} onClick={signOut}>Sign out</button></div>
+        <AdminPanel user={user}/>
         <div className="cloud-sync">
           <span className={'cloud-dot cloud-'+saveState}/>
           {saveState==='saved'?'Cloud saved':saveState==='pending'?'Saving changes…':saveState==='conflict'?'Cloud conflict — save as copy':saveState==='error'?'Cloud save failed':'Current plan is local only'}
