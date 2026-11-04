@@ -281,6 +281,30 @@ function App(){
     }catch(err){setStatus('Address search failed: '+err.message);}
   }
   function editTent(patch){setProject(p=>({...p,tents:(p.tents||[]).map(t=>t.id===selected?{...t,...patch}:t)}));}
+  function changeSelectedDimension(field,raw){
+    const setters={width:setWidthDraft,length:setLengthDraft,rotation:setRotationDraft,clearance:setClearanceDraft};
+    setters[field](raw);
+    const max=field==='rotation'?359:field==='clearance'?200:2000;
+    const min=field==='clearance'||field==='rotation'?0:1;
+    const n=Number(raw);
+    if(raw.trim()!==''&&Number.isFinite(n)&&n>=min&&n<=max){
+      editTent({[field]:n});
+    }
+  }
+  function finishSelectedDimension(field,raw){
+    if(!chosen)return;
+    const max=field==='rotation'?359:field==='clearance'?200:2000;
+    const min=field==='clearance'||field==='rotation'?0:1;
+    const n=clamp(raw,min,max,chosen[field]);
+    editTent({[field]:n});
+    const setters={width:setWidthDraft,length:setLengthDraft,rotation:setRotationDraft,clearance:setClearanceDraft};
+    setters[field](String(n));
+  }
+  function beginAddTent(){
+    setTool('place');setPendingTent(null);setMeasureCursor(null);
+    // Keep the Add Tent panel reachable even when the selected-tent editor is expanded.
+    addSectionRef.current?.scrollIntoView({block:'start',behavior:'smooth'});
+  }
   function confirmTent(){
     if(!pendingTent)return;
     const id=pendingTent.id;
@@ -340,7 +364,7 @@ function App(){
     }catch(err){setStatus('Image export failed: '+err.message);}
   }
   function exportFile(){
-    const blob=new Blob([JSON.stringify({...project,format:'uds-v0.1'},null,2)],{type:'application/json'});
+    const blob=new Blob([JSON.stringify({...project,measurement:{points,closed:measureClosed},format:'uds-v0.1'},null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=cleanedFilename(project.name)+'.json';a.click();URL.revokeObjectURL(url);
   }
   async function importFile(e){
@@ -350,16 +374,48 @@ function App(){
       const p=JSON.parse(await file.text());if(p.format!=='uds-v0.1'||!Array.isArray(p.tents))throw Error('Not a Universal Design Studio project');
       const valid=p.tents.filter(t=>Number.isFinite(t.lng)&&Number.isFinite(t.lat)&&t.width>0&&t.length>0).slice(0,150);
       setProject({name:String(p.name||'Imported plan'),center:p.center||[-90.1994,38.627],zoom:p.zoom||17,tents:valid});
-      setSelected(null);setPendingTent(null);setTool('select');setPoints([]);if(p.center)mapRef.current?.jumpTo({center:p.center,zoom:p.zoom||17});
+      setSelected(null);setPendingTent(null);setTool('select');
+      setPoints(Array.isArray(p.measurement?.points)?p.measurement.points.filter(a=>Array.isArray(a)&&a.length===2&&a.every(Number.isFinite)).slice(0,100):[]);
+      setMeasureClosed(Boolean(p.measurement?.closed));setMeasureCursor(null);setNearStart(false);
+      if(p.center)mapRef.current?.jumpTo({center:p.center,zoom:p.zoom||17});
     }catch(err){setStatus('Import failed: '+err.message);}
   }
   return <div className="layout">
     <aside className="sidebar">
-      <div className="brand"><span className="mark">U</span><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.2</small></div></div>
+      <div className="brand"><span className="mark">U</span><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.3</small></div></div>
+      <div className="quick-actions"><button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button></div>
       <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
-      <section><h3>Tools</h3><div className="grid"><button className={tool==='select'?'active':''} disabled={!token} onClick={()=>{setTool('select');setPendingTent(null);}}>Select / drag</button><button className={tool==='measure'?'active':''} disabled={!token} onClick={()=>{setTool('measure');setPendingTent(null);setPoints([]);}}>Measure</button></div><p className="hint">{tool==='measure'?'Click two points to measure a distance.':tool==='place'?'Click on the map to preview a tent, then confirm below.':'Click a tent to select it. Drag to reposition.'}</p>{points.length===2&&<div className="measurement">Distance: {distance(points[0],points[1]).toFixed(1)} ft</div>}</section>
-      <section><h3>Add a tent</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={()=>{setPendingTent(null);setTool('place');setPoints([]);}}>Add tent — preview position</button>{tool==='place'&&<div className="placement-controls"><strong>{pendingTent?'Tent preview ready':'Click the map to preview the tent'}</strong><p>You can click elsewhere to move the preview. Nothing gets added until you confirm.</p><button className="primary" disabled={!pendingTent} onClick={confirmTent}>Confirm add tent</button><button onClick={cancelTent}>Cancel</button></div>}</section>
-      <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><div key={t.id} className="tent-list-row"><button className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setTool('select');setPendingTent(null);setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+' × '+t.length+' ft'}</button><button className="tent-remove" aria-label={'Delete tent '+(i+1)} title="Delete tent" onClick={()=>deleteTent(t)}>×</button></div>)}{chosen&&<div className="chosen"><h4>Selected tent</h4><RotationDial angle={chosen.rotation} onChange={value=>editTent({rotation:value})}/><label>Rotation (degrees)<input type="number" value={rotationDraft} onChange={e=>setRotationDraft(e.target.value)} onBlur={()=>{const value=clamp(rotationDraft,0,359,chosen.rotation);editTent({rotation:value});setRotationDraft(String(value));}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label><label>Clearance (feet per side)<input type="number" min="0" value={clearanceDraft} onChange={e=>setClearanceDraft(e.target.value)} onBlur={()=>{const value=clamp(clearanceDraft,0,200,chosen.clearance);editTent({clearance:value});setClearanceDraft(String(value));}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label><button onClick={()=>editTent({rotation:(chosen.rotation+15)%360})}>Rotate +15°</button></div>}</section>
+      <section><h3>Tools</h3>
+        <div className="grid">
+          <button className={tool==='select'?'active':''} disabled={!token} onClick={()=>{setTool('select');setPendingTent(null);setMeasureCursor(null);}}>Select / drag</button>
+          <button className={tool==='measure'?'active':''} disabled={!token} onClick={()=>{setTool('measure');setPendingTent(null);setPoints([]);setMeasureCursor(null);setMeasureClosed(false);setNearStart(false);}}>New measurement</button>
+        </div>
+        <p className="hint">{tool==='measure'?(measureClosed?'Outline closed. Start a new measurement to draw again.':nearStart?'Click the highlighted starting pin to close your outline.':points.length===0?'Click once to drop your starting pin, then move the mouse to measure.':'Click to add corners; return to the starting pin to finish.'):'Select a tent to adjust its dimensions and clearance, or drag it to reposition.'}</p>
+        {points.length>0&&<div className="measure-summary">
+          <div><strong>{measureClosed?'Measured outline':'Measuring…'}</strong><span>{points.length} pinned {points.length===1?'point':'points'}</span></div>
+          <div>Measured distance: <b>{totalMeasuredFeet(points,measureClosed).toFixed(2)} ft</b></div>
+          {tool==='measure'&&!measureClosed&&measureCursor&&<div>Live segment: <b>{distance(points[points.length-1],measureCursor).toFixed(2)} ft</b></div>}
+          <div className="measure-actions">
+            {!measureClosed&&points.length>=3&&<button onClick={()=>{setMeasureClosed(true);setMeasureCursor(null);setNearStart(false);}}>Close outline</button>}
+            <button onClick={()=>{setPoints([]);setMeasureCursor(null);setMeasureClosed(false);setNearStart(false);}}>Clear</button>
+          </div>
+          <p className="hint">Side labels show feet to two decimals. Repeated side lengths within 0.03 ft are labeled only once.</p>
+        </div>}
+      </section>
+      <section ref={addSectionRef} className="add-tent-section"><h3>Add a tent</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Preview tent on map</button>{tool==='place'&&<div className="placement-controls"><strong>{pendingTent?'Tent preview ready':'Click the map to preview the tent'}</strong><p>You can click elsewhere to move the preview. Nothing gets added until you confirm.</p><button className="primary" disabled={!pendingTent} onClick={confirmTent}>Confirm add tent</button><button onClick={cancelTent}>Cancel</button></div>}</section>
+      <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><div key={t.id} className="tent-list-row"><button className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setTool('select');setPendingTent(null);setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+' × '+t.length+' ft'}</button><button className="tent-remove" aria-label={'Delete tent '+(i+1)} title="Delete tent" onClick={()=>deleteTent(t)}>×</button></div>)}{chosen&&<div className="chosen"><h4>Edit selected tent</h4>
+            <div className="grid">
+              <label>Width (ft)<input type="number" min="1" max="2000" value={widthDraft} onChange={e=>changeSelectedDimension('width',e.target.value)} onBlur={()=>finishSelectedDimension('width',widthDraft)}/></label>
+              <label>Length (ft)<input type="number" min="1" max="2000" value={lengthDraft} onChange={e=>changeSelectedDimension('length',e.target.value)} onBlur={()=>finishSelectedDimension('length',lengthDraft)}/></label>
+            </div>
+            <RotationDial angle={chosen.rotation} onChange={value=>{editTent({rotation:value});setRotationDraft(String(value));}}/>
+            <div className="grid">
+              <label>Rotation (°)<input type="number" min="0" max="359" value={rotationDraft} onChange={e=>changeSelectedDimension('rotation',e.target.value)} onBlur={()=>finishSelectedDimension('rotation',rotationDraft)}/></label>
+              <label>Clearance (ft per side)<input type="number" min="0" max="200" step="0.01" value={clearanceDraft} onChange={e=>changeSelectedDimension('clearance',e.target.value)} onBlur={()=>finishSelectedDimension('clearance',clearanceDraft)}/></label>
+            </div>
+            <p className="hint">All four values update the tent outline as you type. Clearance is the dashed outer boundary.</p>
+            <button onClick={()=>{const angle=(chosen.rotation+15)%360;editTent({rotation:angle});setRotationDraft(String(angle));}}>Rotate +15°</button>
+          </div>}</section>
       <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Save editable project (.json)</button><label className="filebutton">Open editable project (.json)<input type="file" accept=".json" onChange={importFile}/></label><div className="grid image-exports"><button disabled={!token} onClick={()=>exportImage('png')}>Export PNG</button><button disabled={!token} onClick={()=>exportImage('jpg')}>Export JPG</button></div><p className="hint">JSON saves editable tent geometry for reopening. PNG/JPG are flat pictures of the map. Projects are saved in this browser; Appwrite cloud saving comes later.</p></section>
     </aside>
     <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">{pendingTent?'Preview only — click Confirm add tent in the sidebar':'Tent placement: click a location to preview'}</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
