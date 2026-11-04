@@ -95,8 +95,9 @@ function ItemShape({item,selected,press,outside,showHandle=true,stageLink=null})
     {type==='stairs'&&stageLink&&<g pointerEvents="none"><circle cx={w/2-.27} cy={h/2-.28} r=".3" fill="#4ade80" stroke="#123b2a" strokeWidth=".07"/><text x={w/2-.27} y={h/2-.28} fontSize=".36" fontWeight="800" fill="#083519" textAnchor="middle" dominantBaseline="middle">✓</text></g>}
     {type==='dance'&&<><path d={`M ${-w/2} 0 H ${w/2} M 0 ${-h/2} V ${h/2}`} stroke="#806180" strokeWidth=".1" strokeDasharray=".7,.4"/></>}
     {caption&&<g pointerEvents="none">
-      <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038">{caption}</text>
-      {['stage','dance','stairs','bar'].includes(type)&&<text textAnchor="middle" y={Math.min(h*.21,1)} dominantBaseline="central" fontWeight="700" fontSize={Math.min(.9,fontSize*.78)} fill="#183038">{number(w)} × {number(h)} ft</text>}
+      <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill={type==='stage'?'#f0f3f8':'#183038'}>{caption}</text>
+      {['stage','dance','stairs','bar'].includes(type)&&<text textAnchor="middle" y={Math.min(h*.21,1)} dominantBaseline="central" fontWeight="700" fontSize={Math.min(.9,fontSize*.78)} fill={type==='stage'?'#f0f3f8':'#183038'}>{number(w)} × {number(h)} ft</text>}
+      {type==='stage'&&<text textAnchor="middle" y={Math.min(h*.39,1.55)} fontSize={Math.min(.7,fontSize*.75)} fontWeight="700" fill="#9ae7cb">{Number(item.heightInches)||16}″ high</text>}
     </g>}
     {selected&&showHandle&&<>
       <line x1="0" y1={-h/2} x2="0" y2={-h/2-1.6} stroke="#ffdd92" strokeWidth=".16"/>
