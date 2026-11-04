@@ -35,6 +35,7 @@ test('parking polygon, delivery route and pin appear as different geometries',()
   assert.equal(out.area.features.length,1);
   assert.equal(out.border.features.length,1);
   assert.equal(out.route.features.length,1);
+  assert.equal(out.corridor.features.length,2);
   assert.equal(out.pins.features.length,3);
   assert.equal(out.labels.features.length,3);
   assert.ok(out.route.features[0].properties.color.startsWith('#'));
@@ -53,4 +54,16 @@ test('route preview and vertex pins persist during drafting',()=>{
   assert.equal(out.draft.features.length,1);
   assert.equal(out.draft.features[0].geometry.coordinates.length,3);
   assert.equal(out.draftPoints.features.length,2);
+});
+
+test('route corridors use drawn width in ground coordinates',()=>{
+  const narrow=siteLogisticsGeoJSON([{id:'n',type:'grass',shape:'route',widthFt:4,points:[point,east]}]);
+  const wide=siteLogisticsGeoJSON([{id:'w',type:'vehicle',shape:'route',widthFt:20,points:[point,east]}]);
+  const a=narrow.corridor.features[0].geometry.coordinates[0];
+  const b=wide.corridor.features[0].geometry.coordinates[0];
+  assert.equal(a.length,5);
+  assert.equal(b.length,5);
+  const widthNarrow=siteFeet(a[0],a[3]),widthWide=siteFeet(b[0],b[3]);
+  assert.ok(Math.abs(widthNarrow-4)<.3);
+  assert.ok(Math.abs(widthWide-20)<.5);
 });
