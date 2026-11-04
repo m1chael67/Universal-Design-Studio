@@ -10,6 +10,8 @@ import {interiorGeoJSON} from './mapInterior.js';
 import {siteLogisticsGeoJSON,logisticsType,siteFeet} from './siteLogistics.js';
 import SiteLogisticsPanel from './SiteLogisticsPanel.jsx';
 import PhotoMarkup from './PhotoMarkup.jsx';
+import ReportsPanel from './ReportsPanel.jsx';
+import ThreeDViewer from './ThreeDViewer.jsx';
 
 const FEET = 3.280839895;
 // Configure VITE_MAPBOX_PUBLIC_TOKEN once in Appwrite Sites environment variables.
@@ -108,6 +110,7 @@ function App(){
     try{return PUBLIC_MAPBOX_TOKEN||(localStorage.getItem('uds-mapbox-token')||'');}catch{return PUBLIC_MAPBOX_TOKEN;}
   });
   const [mapStyle,setMapStyle]=useState('satellite');
+  const [show3D,setShow3D]=useState(false);
   const [status,setStatus]=useState(PUBLIC_MAPBOX_TOKEN?'Loading satellite imagery…':'Add the Mapbox token once to the Appwrite site environment to enable every device.');
   const [imageryAccess,setImageryAccess]=useState('unknown');
   const [address,setAddress]=useState('');
@@ -605,7 +608,7 @@ function App(){
   }
   return <div className="layout">
     <aside className="sidebar">
-      <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V1.1</small></div></div>
+      <div className="brand"><img className="crew-brand-logo" src="/universal-crew-logo.jpg" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V1.3</small></div></div>
       <div className="quick-actions">
         <div className="quick-navigation">
           <button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button>
@@ -633,6 +636,8 @@ function App(){
         onFitAll={fitEntireSite}/>
       </div>
       <PhotoMarkup value={project.sitePhoto||null} onChange={saveSitePhoto} projectName={project.name}/>
+      <ReportsPanel project={project} mapRef={mapRef}/>
+      <section className="three-d-entry"><button className="primary" disabled={!tents.length} onClick={()=>setShow3D(true)}>Open interactive 3D tent viewer</button><p className="hint">Orbit around your tent, inspect furnishings, toggle the roof and export a preview.</p></section>
       <details className="sidebar-collapsible"><summary>Tools & measurements</summary><div className="sidebar-collapsible-body">
         <div className="grid">
           <button className={tool==='select'?'active':''} disabled={!token} onClick={()=>{setTool('select');setPendingTent(null);setMeasureCursor(null);setLogisticsDraft(null);setLogisticsHover(null);}}>Select / drag</button>
@@ -720,6 +725,7 @@ function App(){
       </label>
       <span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span>
     </div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">Click on the map to place your tent. Press Cancel placement to exit.</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
+    {show3D&&<ThreeDViewer tents={tents} onClose={()=>setShow3D(false)}/>}
     {interiorTent&&<InteriorPlanner tent={interiorTent} onChange={saveInterior}
       onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo}
       onShowSite={()=>{setProject(p=>({...p,tents:p.tents.map(t=>t.id===interiorId?{...t,showInteriorOnMap:true}:t)}));setSelected(interiorId);setInteriorId(null);requestAnimationFrame(()=>mapRef.current?.resize());}}
