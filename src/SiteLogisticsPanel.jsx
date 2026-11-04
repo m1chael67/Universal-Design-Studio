@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {LOGISTICS_TYPES,logisticsType,routeFeet,siteFeet} from './siteLogistics.js';
+import {LOGISTICS_TYPES,logisticsType,routeFeet,siteFeet,defaultPathWidth} from './siteLogistics.js';
 import './siteLogistics.css';
 
 const polygonAreaFt2=points=>{
@@ -31,7 +31,9 @@ export default function SiteLogisticsPanel({items,draft,selected,onSelect,onStar
   const chosen=logisticsType(category);
   function start(){
     const title=label.trim()||chosen.name;
-    onStart({id:crypto.randomUUID(),type:category,label:title,notes:notes.trim(),shape:chosen.kind==='area'?shape:chosen.kind,points:[]});
+    onStart({id:crypto.randomUUID(),type:category,label:title,notes:notes.trim(),
+      widthFt:chosen.kind==='route'?defaultPathWidth(category):null,
+      shape:chosen.kind==='area'?shape:chosen.kind,points:[]});
   }
   return <section className="site-logistics" aria-label="Site logistics and access planning">
     <button type="button" className="site-logistics-toggle" aria-expanded={open} onClick={()=>setOpen(v=>!v)}>
@@ -41,7 +43,7 @@ export default function SiteLogisticsPanel({items,draft,selected,onSelect,onStar
       <p className="hint">Mark parking, unloading, grass-safe paths, truck routes, restricted areas, and crew entry. All annotations save with the project.</p>
       {draft?<div className="site-logistics-drawing">
         <strong>Drawing: {draft.label}</strong>
-        <p>Click the satellite map to add {draft.shape==='circle'?'a center and edge':chosen.kind==='pin'?'a pin': 'route points or area corners'}.</p>
+        <p>Click the satellite map to add {draft.shape==='circle'?'a center and edge':logisticsType(draft.type).kind==='pin'?'a pin':'route points or area corners'}.</p>
         <p>Points: <b>{draft.points.length}</b>
           {draft.type==='vehicle'||draft.type==='foot'||draft.type==='grass'||draft.type==='emergency'?
             ' · '+routeFeet(draft.points).toFixed(1)+' ft':''}
@@ -83,6 +85,14 @@ export default function SiteLogisticsPanel({items,draft,selected,onSelect,onStar
               onChange={e=>onChange(item.id,{label:e.target.value})}/></label>
             <label>Crew notes<textarea rows={2} maxLength={450} value={item.notes||''}
               onChange={e=>onChange(item.id,{notes:e.target.value})}/></label>
+            {logisticsType(item.type).kind==='route'&&<label>Approximate route width (feet)
+              <input type="number" min="1" max="100" step="1" value={item.widthFt??defaultPathWidth(item.type)}
+                onChange={e=>{
+                  const raw=e.target.value;if(raw==='')return;
+                  const value=Number(raw);if(Number.isFinite(value))
+                    onChange(item.id,{widthFt:Math.max(1,Math.min(100,value))});
+                }}/>
+            </label>}
             <div className="site-logistics-btn-row">
               <button onClick={()=>onZoom(item)}>Find on map</button>
               <button onClick={()=>onStart({...item,points:[]})}>Redraw</button>
