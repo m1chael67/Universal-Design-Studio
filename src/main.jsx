@@ -170,6 +170,7 @@ function App(){
   },[undo,redo]);
   useEffect(()=>{
     if(!selected)return;
+    if(layerDetailsRef.current)layerDetailsRef.current.open=true;
     const frame=requestAnimationFrame(()=>editorRef.current?.scrollIntoView({block:'nearest',behavior:'smooth'}));
     return ()=>cancelAnimationFrame(frame);
   },[selected]);
@@ -464,7 +465,7 @@ function App(){
     setLogisticsDraft(null);setLogisticsHover(null);
     setTool('place');setPendingTent(null);setMeasureCursor(null);
     // Keep the Add Tent panel reachable even when the selected-tent editor is expanded.
-    addSectionRef.current?.scrollIntoView({block:'start',behavior:'smooth'});
+    addDetailsRef.current?.scrollIntoView({block:'start',behavior:'smooth'});
   }
   function confirmTent(){
     if(!pendingTent)return;
@@ -588,7 +589,7 @@ function App(){
   async function importFile(e){
     const file=e.target.files?.[0];e.target.value='';if(!file)return;
     try{
-      if(file.size>1000000)throw Error('File too large');
+      if(file.size>3000000)throw Error('File too large (max 3 MB for JSON backup).');
       const p=JSON.parse(await file.text());if(p.format!=='uds-v0.1'||!Array.isArray(p.tents))throw Error('Not a Universal Design Studio project');
       const valid=p.tents.filter(t=>Number.isFinite(t.lng)&&Number.isFinite(t.lat)&&t.width>0&&t.length>0).slice(0,150);
       setProject({name:String(p.name||'Imported plan'),center:p.center||[-90.1994,38.627],zoom:p.zoom||17,tents:valid,
@@ -651,7 +652,6 @@ function App(){
       </div></details>
       <details className="sidebar-collapsible layer-section" ref={layerDetailsRef}>
         <summary>Layers — Tents ({tents.length})</summary><div className="sidebar-collapsible-body">
-        <h3>Layers — Tents ({tents.length})</h3>
         {tents.length===0&&<p className="hint">No tents yet. Use + Add tent, then click the map once.</p>}
         {tents.map((t,i)=><div key={t.id} className={'tent-list-row '+(selected===t.id?'selected-row':'')+(t.hidden?' hidden-layer':'')}>
           <button type="button" className={'listitem layer-tab '+(selected===t.id?'active':'')} aria-pressed={selected===t.id}
