@@ -184,6 +184,7 @@ export default function ThreeDViewer({tents,onClose}){
       scene?.traverse(obj=>{
         obj.geometry?.dispose();
         if(obj.material)(Array.isArray(obj.material)?obj.material:[obj.material]).forEach(m=>{
+          if(m.userData?.sharedMaterial)return;
           m.map?.dispose();m.dispose();
         });
       });
