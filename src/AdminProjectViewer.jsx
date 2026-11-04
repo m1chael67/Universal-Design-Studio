@@ -174,6 +174,27 @@ export default function AdminProjectViewer({record,owner,onClose}){
             </div>
           </div>)}
           {!tents.length&&<p>No tents in this project.</p>}
+          {plan.sitePhoto?.photo?.dataUrl&&<details className="admin-photo-preview">
+            <summary>Site photo · {plan.sitePhoto.annotations?.length||0} marks</summary>
+            <div className="admin-photo-stage">
+              <img src={plan.sitePhoto.photo.dataUrl} alt="Saved site reference photo" draggable={false}/>
+              <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="Read-only photo markings">
+                {(plan.sitePhoto.annotations||[]).map((a,i)=>{
+                  if(a.type==='box')return <rect key={i} x={Math.min(a.x,a.x2)*1000} y={Math.min(a.y,a.y2)*1000}
+                    width={Math.abs(a.x2-a.x)*1000} height={Math.abs(a.y2-a.y)*1000}
+                    fill="#56dccb33" stroke={a.color||'#56dcca'} strokeWidth="5"/>;
+                  if(a.type==='arrow')return <line key={i} x1={a.x*1000} y1={a.y*1000}
+                    x2={a.x2*1000} y2={a.y2*1000} stroke={a.color||'#ffe083'} strokeWidth="8"/>;
+                  return <g key={i}>
+                    <circle cx={a.x*1000} cy={a.y*1000} r="13" fill={a.color||'#ffcf7b'} stroke="#152b32" strokeWidth="5"/>
+                    <text x={a.x*1000+22} y={a.y*1000-20} fontSize="35" fontWeight="700" fill="white"
+                      stroke="#153039" strokeWidth="6" paintOrder="stroke">{a.text||'Mark'}</text>
+                  </g>;
+                })}
+              </svg>
+            </div>
+            <p className="admin-photo-warning">Read-only photo. Download a JSON copy to retain original annotations.</p>
+          </details>}
           <h3 className="admin-preview-logistics-heading">Site logistics · {marks.length}</h3>
           <details className="admin-preview-checklist">
             <summary>Site checks: {LOGISTICS_CHECKS.filter(c=>plan.siteChecklist?.[c.id]).length}/{LOGISTICS_CHECKS.length} verified</summary>
