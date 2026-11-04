@@ -14,7 +14,7 @@ export function westCoastProfile(length,width,eave=7){
   const ridgeXs=[left,right,...xs.filter(x=>x>left+.01&&x<right-.01)].sort((a,b)=>a-b);
   return {length,width,eave,ridge:eave+rise,rise,hip,left,right,
     xs,ridgeXs:[...new Set(ridgeXs.map(x=>Number(x.toFixed(5))))],
-    legXs:xs,legCount:2*(bays+1),bayCount:bays,
+    legXs:xs,legCount:2*(bays+1)+(span>=19.5?2:0),bayCount:bays,
     exactTenFootBays:Math.abs(length/10-Math.round(length/10))<.0001};
 }
 export function constrainedWalkPosition(position,target,length,width,eave=7){
