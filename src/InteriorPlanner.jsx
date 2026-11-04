@@ -113,6 +113,14 @@ function doorPosition(d,w,h){
   const at=cap(Number(d.at)||0,0,len);
   return wall==='top'?[at,0]:wall==='bottom'?[at,h]:wall==='right'?[w,at]:[0,at];
 }
+function FoldSection({title,open,onToggle,children,count}){
+  return <section className="ip-fold">
+    <button type="button" className="ip-fold-trigger" aria-expanded={open} onClick={onToggle}>
+      <span>{title}{count!=null?<small> ({count})</small>:null}</span><span aria-hidden="true">{open?'−':'+'}</span>
+    </button>
+    {open&&<div className="ip-fold-content">{children}</div>}
+  </section>;
+}
 export default function InteriorPlanner({tent,onChange,onClose}){
   // Present the tent with its LENGTH across the top and its WIDTH on the side.
   const w=Number(tent.length)||40,h=Number(tent.width)||20;
@@ -245,6 +253,15 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     else if(selected?.startsWith('measure:'))commit({measurements:layout.measurements.filter(m=>'measure:'+m.id!==selected)});
     else commit({objects:layout.objects.filter(o=>!selectedIds.includes(o.id)&&o.id!==selected)});
     setSelected(null);setSelectedIds([]);
+  }
+  function centerSelected(){
+    if(!selectedIds.length)return;
+    const set=layout.objects.filter(o=>selectedIds.includes(o.id));if(!set.length)return;
+    const minX=Math.min(...set.map(o=>o.x-o.w/2)),maxX=Math.max(...set.map(o=>o.x+o.w/2));
+    const minY=Math.min(...set.map(o=>o.y-o.h/2)),maxY=Math.max(...set.map(o=>o.y+o.h/2));
+    const dx=w/2-(minX+maxX)/2,dy=h/2-(minY+maxY)/2;
+    const ids=new Set(set.map(o=>o.id));
+    commit({objects:layout.objects.map(o=>ids.has(o.id)?{...o,x:Number((o.x+dx).toFixed(3)),y:Number((o.y+dy).toFixed(3))}:o)});
   }
   function clearMeasurements(){
     if(!layout.measurements.length||!window.confirm('Delete all '+layout.measurements.length+' interior measurements?'))return;
@@ -465,23 +482,48 @@ export default function InteriorPlanner({tent,onChange,onClose}){
       <div className="ip-exports"><button onClick={()=>exportBitmap('png')}>PNG</button><button onClick={()=>exportBitmap('jpg')}>JPG</button><button onClick={exportSvg}>SVG</button></div>
     </header>
     <div className="ip-workspace">
-      <aside className="ip-panel">
-        <section><h3>Add equipment</h3><div className="ip-catalog">
-          {CATALOG.map(cat=><button key={cat.key} onClick={()=>addObject(cat)} title={cat.title}><span className={'ip-swatch ip-'+cat.type}/><span>{cat.title}</span></button>)}
-        </div></section>
-        <section><h3>Doors & sidewalls</h3>
-          <button className="ip-wide" onClick={addDoor}>+ Add door / entrance</button>
-          <p className="ip-help">Toggle each wall. Select a door below to choose its wall, width and position.</p>
-          <div className="ip-wall-grid">{WALLS.map(wall=><label key={wall}><input type="checkbox" checked={Boolean(layout.sidewalls[wall])} onChange={e=>commit({sidewalls:{...layout.sidewalls,[wall]:e.target.checked}})}/>{wall}</label>)}</div>
-        </section>
-        <section><h3>Tools</h3>
-          <div className="ip-tool-row"><button className={mode==='select'?'selected':''} onClick={()=>{setMode('select');setMeasureStart(null);}}>Select / move</button><button className={mode==='measure'?'selected':''} onClick={()=>{setMode('measure');setSelected(null);}}>Measure</button></div>
-          <label className="ip-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap to grid</label>
-          <label className="ip-field">Grid step <select value={gridStep} onChange={e=>setGridStep(+e.target.value)}>
-            <option value=".25">3 in</option><option value=".5">6 in</option><option value="1">1 ft</option><option value="2">2 ft</option>
-            <option value="3">3 ft</option><option value="4">4 ft</option><option value="5">5 ft</option><option value="10">10 ft</option>
-          </select></label>
-          <p className="ip-help">{mode==='measure'?'Click the first point, move for a live distance, then click a second point.':'Drag items to move them. Select an item and drag its gold handle to rotate.'}</p>
+      <aside className="ip-panel" ref={panelRef}>
+        <div className="ip-quick-bar">
+          <button onClick={()=>{setPanels(p=>({...p,catalog:true}));setOptimizerOpen(false);}}>+ Equipment</button>
+          <button className={mode==='select'?'selected':''} onClick={()=>{setMode('select');setMeasureStart(null);}}>Select</button>
+          <button className={mode==='measure'?'selected':''} onClick={()=>{setMode('measure');setSelected(null);setSelectedIds([]);setOptimizerPreview(null);}}>Measure</button>
+          <button className={optimizerOpen?'selected':''} onClick={()=>{setOptimizerOpen(x=>!x);setPanels(p=>({...p,catalog:false}));}}>Optimize</button>
+        </div>
+        <section><h3>Selected item</h3>
+          {chosen?<div className="ip-fields">
+            <strong>{itemDescription(chosen)}</strong>
+            <div className="ip-field-grid">
+              <XYField key={chosen.id+'x'} label="X position (ft)" value={Number(chosen.x.toFixed(2))} onCommit={x=>updateObject(chosen.id,{x})} max={w}/>
+              <XYField key={chosen.id+'y'} label="Y position (ft)" value={Number(chosen.y.toFixed(2))} onCommit={y=>updateObject(chosen.id,{y})} max={h}/>
+              <XYField key={chosen.id+'w'} label={chosen.type==='stage'?'Width (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Width (3 ft increments)':'Width (ft)'}
+                value={chosen.w} min={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+                step={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+                onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'w',val):updateObject(chosen.id,{w:val})}/>
+              <XYField key={chosen.id+'h'} label={chosen.type==='stage'?'Depth (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Depth (3 ft increments)':'Depth (ft)'}
+                value={chosen.h} min={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+                step={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+                onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'h',val):updateObject(chosen.id,{h:val})}/>
+              <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
+            </div>
+            {chosen.type==='stage'&&<p className="ip-help">Bil-Jax: stage width and depth are made from 4 × 4 ft modules. The size fields round to 4-foot increments.</p>}
+            {chosen.type==='dance'&&<label className="ip-check ip-custom-dance">
+              <input type="checkbox" checked={Boolean(chosen.customSize)} onChange={e=>updateObject(chosen.id,{
+                customSize:e.target.checked,
+                ...(e.target.checked?{}:{w:Math.max(3,Math.round(chosen.w/3)*3),h:Math.max(3,Math.round(chosen.h/3)*3)})
+              })}/>Allow custom dance-floor sizes (otherwise 3 × 3 ft modules)
+            </label>}
+            {alignmentGuide&&<p className="ip-align-readout">Aligned: parallel/perpendicular to {alignmentGuide.source.toLowerCase()}</p>}
+            {seatingCount(chosen)>0&&<button className="ip-wide ip-seating-button" onClick={addChairsAround}>+ Add {seatingCount(chosen)} chairs around table</button>}
+            <div className="ip-tool-row"><button onClick={duplicateSelected}>Duplicate</button><button className="ip-danger" onClick={removeSelected}>Delete</button></div>
+          </div>:chosenDoor?<div className="ip-fields">
+            <strong>Door / entrance</strong>
+            <label className="ip-field">Tent side<select value={chosenDoor.wall} onChange={e=>{const wall=e.target.value;const len=wall==='top'||wall==='bottom'?w:h;commit({doors:layout.doors.map(d=>d.id===chosenDoor.id?{...d,wall,at:len/2}:d),sidewalls:{...layout.sidewalls,[wall]:true}});}}>
+              {WALLS.map(w=><option key={w} value={w}>{w}</option>)}
+            </select></label>
+            <XYField key={chosenDoor.id+'dw'} label="Door width (ft)" value={chosenDoor.width} min={1} max={Math.max(w,h)} onCommit={val=>updateDoor(chosenDoor.id,{width:val})}/>
+            <XYField key={chosenDoor.id+'da'} label="Position along wall (ft)" value={chosenDoor.at} max={chosenDoor.wall==='top'||chosenDoor.wall==='bottom'?w:h} onCommit={val=>updateDoor(chosenDoor.id,{at:val})}/>
+            <button className="ip-danger ip-wide" onClick={removeSelected}>Delete door</button>
+          </div>:<p className="ip-help">Select a table, chair, stage, dance floor, or door to edit its dimensions and angle.</p>}
         </section>
         <section className="ip-optimizer-section"><button type="button" className="ip-section-toggle" onClick={()=>{setOptimizerOpen(v=>!v);setOptimizerPreview(null);}}>
           <span>Seating Layout Optimizer</span><span>{optimizerOpen?'−':'+'}</span>
@@ -551,49 +593,41 @@ export default function InteriorPlanner({tent,onChange,onClose}){
           <p className="ip-help">Roomy, balanced and maximum use different estimated gaps. Door buffer zones and existing objects are accounted for conservatively, but human circulation, accessibility, tent poles, anchoring, and exit requirements still need review.</p>
         </>}
         </section>
-        <section><h3>Selected item</h3>
-          {chosen?<div className="ip-fields">
-            <strong>{itemDescription(chosen)}</strong>
-            <div className="ip-field-grid">
-              <XYField key={chosen.id+'x'} label="X position (ft)" value={Number(chosen.x.toFixed(2))} onCommit={x=>updateObject(chosen.id,{x})} max={w}/>
-              <XYField key={chosen.id+'y'} label="Y position (ft)" value={Number(chosen.y.toFixed(2))} onCommit={y=>updateObject(chosen.id,{y})} max={h}/>
-              <XYField key={chosen.id+'w'} label={chosen.type==='stage'?'Width (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Width (3 ft increments)':'Width (ft)'}
-                value={chosen.w} min={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
-                step={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
-                onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'w',val):updateObject(chosen.id,{w:val})}/>
-              <XYField key={chosen.id+'h'} label={chosen.type==='stage'?'Depth (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Depth (3 ft increments)':'Depth (ft)'}
-                value={chosen.h} min={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
-                step={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
-                onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'h',val):updateObject(chosen.id,{h:val})}/>
-              <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
-            </div>
-            {chosen.type==='stage'&&<p className="ip-help">Bil-Jax: stage width and depth are made from 4 × 4 ft modules. The size fields round to 4-foot increments.</p>}
-            {chosen.type==='dance'&&<label className="ip-check ip-custom-dance">
-              <input type="checkbox" checked={Boolean(chosen.customSize)} onChange={e=>updateObject(chosen.id,{
-                customSize:e.target.checked,
-                ...(e.target.checked?{}:{w:Math.max(3,Math.round(chosen.w/3)*3),h:Math.max(3,Math.round(chosen.h/3)*3)})
-              })}/>Allow custom dance-floor sizes (otherwise 3 × 3 ft modules)
-            </label>}
-            {alignmentGuide&&<p className="ip-align-readout">Aligned: parallel/perpendicular to {alignmentGuide.source.toLowerCase()}</p>}
-            {seatingCount(chosen)>0&&<button className="ip-wide ip-seating-button" onClick={addChairsAround}>+ Add {seatingCount(chosen)} chairs around table</button>}
-            <div className="ip-tool-row"><button onClick={duplicateSelected}>Duplicate</button><button className="ip-danger" onClick={removeSelected}>Delete</button></div>
-          </div>:chosenDoor?<div className="ip-fields">
-            <strong>Door / entrance</strong>
-            <label className="ip-field">Tent side<select value={chosenDoor.wall} onChange={e=>{const wall=e.target.value;const len=wall==='top'||wall==='bottom'?w:h;commit({doors:layout.doors.map(d=>d.id===chosenDoor.id?{...d,wall,at:len/2}:d),sidewalls:{...layout.sidewalls,[wall]:true}});}}>
-              {WALLS.map(w=><option key={w} value={w}>{w}</option>)}
-            </select></label>
-            <XYField key={chosenDoor.id+'dw'} label="Door width (ft)" value={chosenDoor.width} min={1} max={Math.max(w,h)} onCommit={val=>updateDoor(chosenDoor.id,{width:val})}/>
-            <XYField key={chosenDoor.id+'da'} label="Position along wall (ft)" value={chosenDoor.at} max={chosenDoor.wall==='top'||chosenDoor.wall==='bottom'?w:h} onCommit={val=>updateDoor(chosenDoor.id,{at:val})}/>
-            <button className="ip-danger ip-wide" onClick={removeSelected}>Delete door</button>
-          </div>:<p className="ip-help">Select a table, chair, stage, dance floor, or door to edit its dimensions and angle.</p>}
-        </section>
-        <section><h3>Equipment counts</h3>
+        <FoldSection title="Add equipment" open={panels.catalog} onToggle={()=>setPanels(p=>({...p,catalog:!p.catalog}))}><div className="ip-catalog">
+          {CATALOG.map(cat=><button key={cat.key} onClick={()=>addObject(cat)} title={cat.title}><span className={'ip-swatch ip-'+cat.type}/><span>{cat.title}</span></button>)}
+        </div></FoldSection>
+        <FoldSection title="Doors & sidewalls" open={panels.access} onToggle={()=>setPanels(p=>({...p,access:!p.access}))} count={layout.doors.length}>
+          <button className="ip-wide" onClick={addDoor}>+ Add door / entrance</button>
+          <p className="ip-help">Toggle each wall. Select a door below to choose its wall, width and position.</p>
+          <div className="ip-wall-grid">{WALLS.map(wall=><label key={wall}><input type="checkbox" checked={Boolean(layout.sidewalls[wall])} onChange={e=>commit({sidewalls:{...layout.sidewalls,[wall]:e.target.checked}})}/>{wall}</label>)}</div>
+        </FoldSection>
+        <FoldSection title="Doors & measurements" open={panels.annotations} count={layout.doors.length+layout.measurements.length} onToggle={()=>setPanels(p=>({...p,annotations:!p.annotations}))}>
+          <strong className="ip-list-heading">Doors</strong>
+          {layout.doors.map((d,i)=><button type="button" key={d.id} className="ip-annotation-row"
+            onClick={()=>selectEntity('door:'+d.id)}>Door {i+1} — {d.wall}, {fmt(d.width)} ft</button>)}
+          {!layout.doors.length&&<p className="ip-help">No doors placed yet.</p>}
+          <strong className="ip-list-heading">Measurements</strong>
+          {layout.measurements.map((m,i)=><button type="button" key={m.id} className="ip-annotation-row"
+            onClick={()=>selectEntity('measure:'+m.id)}>Measurement {i+1} — {fmt(Math.hypot(m.a.x-m.b.x,m.a.y-m.b.y))} ft</button>)}
+          {!layout.measurements.length&&<p className="ip-help">No measurements yet.</p>}
+          {!!layout.measurements.length&&<button className="ip-wide ip-danger" onClick={clearMeasurements}>Delete all measurements</button>}
+        </FoldSection>
+        <FoldSection title="Grid & measurement tools" open={panels.tools} onToggle={()=>setPanels(p=>({...p,tools:!p.tools}))}>
+          <div className="ip-tool-row"><button className={mode==='select'?'selected':''} onClick={()=>{setMode('select');setMeasureStart(null);}}>Select / move</button><button className={mode==='measure'?'selected':''} onClick={()=>{setMode('measure');setSelected(null);}}>Measure</button></div>
+          <label className="ip-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap to grid</label>
+          <label className="ip-field">Grid step <select value={gridStep} onChange={e=>setGridStep(+e.target.value)}>
+            <option value=".25">3 in</option><option value=".5">6 in</option><option value="1">1 ft</option><option value="2">2 ft</option>
+            <option value="3">3 ft</option><option value="4">4 ft</option><option value="5">5 ft</option><option value="10">10 ft</option>
+          </select></label>
+          <p className="ip-help">{mode==='measure'?'Click the first point, move for a live distance, then click a second point.':'Drag items to move them. Select an item and drag its gold handle to rotate.'}</p>
+        </FoldSection>
+        <FoldSection title="Equipment counts" open={panels.counts} onToggle={()=>setPanels(p=>({...p,counts:!p.counts}))} count={layout.objects.length}>
           <div className="ip-count"><span>Actual chairs placed</span><strong>{totalChairs}</strong></div>
           <div className="ip-count"><span>Doors</span><strong>{layout.doors.length}</strong></div>
           {outOfBounds.length>0&&<p className="ip-outside-warning">{outOfBounds.length} item{outOfBounds.length>1?'s':''} extend beyond the tent boundary (red outline). Check fit before installing.</p>}
           {counts.map(([name,count])=><div className="ip-count" key={name}><span>{name}</span><strong>{count}</strong></div>)}
           <p className="ip-help">Counts reflect objects added to this layout, not your Booqable inventory. Verify aisle and exit clearances with the authority having jurisdiction.</p>
-        </section>
+        </FoldSection>
       </aside>
       <div className="ip-stage" ref={frameRef}>
         <div className="ip-stage-caption">{mode==='measure'?'MEASURE — click two points':selectedIds.length>1?selectedIds.length+' ITEMS SELECTED — drag any highlighted item to move the group':'DRAG TO MOVE • DRAG EMPTY SPACE TO BOX-SELECT • SHIFT+CLICK TO ADD'}</div>
