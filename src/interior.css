@@ -59,3 +59,16 @@
 .ip-exports button{padding:10px 9px}
 .ip-outside-warning{padding:10px;background:#4f3033;border:1px solid #a45055;color:#ffe2df;border-radius:7px;font-size:12px;line-height:1.5}
 @media(max-width:650px){.ip-zoom input[type=range]{width:125px;max-width:40vw}.ip-exports{order:3}}
+
+.ip-section-toggle{display:flex;justify-content:space-between;width:100%;font-weight:700;padding:12px;background:#245653;border:1px solid #49998f;border-radius:8px;color:white}
+.ip-optimizer-cards{display:grid;gap:9px;margin-top:12px}
+.ip-opt-card{background:#243a46;border:1px solid #4e6974;border-radius:9px;padding:12px}
+.ip-opt-active{border-color:#dec585;background:#3c423b}
+.ip-opt-head{display:flex;justify-content:space-between;gap:6px;font-size:12px}
+.ip-opt-card p,.ip-optimizer-section .ip-help{font-size:11px;line-height:1.55}
+.ip-opt-card .ip-tool-row{margin-bottom:0}
+.ip-apply{background:#18766d!important;border-color:#4aada2!important}
+.ip-opt-preview-note{border:1px solid #bc9f65;padding:10px;background:#3b4136;border-radius:8px;font-size:12px}
+.ip-opt-preview-note button{margin:5px;width:90%}
+.ip-custom-dance{margin:10px 0;font-size:12px;line-height:1.6}
+.ip-align-readout{color:#c5f4d1;background:#2a3e39;padding:8px;border-radius:7px;font-size:12px}
