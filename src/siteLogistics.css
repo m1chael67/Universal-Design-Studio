@@ -33,3 +33,5 @@
 .site-readiness-row{display:flex!important;align-items:flex-start;gap:9px;margin:7px 0;font-size:11px!important;font-weight:500!important;line-height:1.5}
 .site-readiness-row input{width:17px;min-width:17px;height:17px;accent-color:#2da995;margin-top:2px}
 .site-readiness-row span{flex:1}
+
+.site-logistics-fit{display:block;width:calc(100% - 24px);margin:12px;font-size:11px!important;background:#27625b!important;border-color:#4da597!important;color:#e5fff4!important;padding:11px 6px!important}
