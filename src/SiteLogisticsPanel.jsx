@@ -1,4 +1,4 @@
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {LOGISTICS_TYPES,logisticsType,routeFeet,siteFeet,defaultPathWidth} from './siteLogistics.js';
 import './siteLogistics.css';
 
@@ -21,8 +21,9 @@ export function logisticsDescription(item){
   if(t.kind==='area')return (polygonAreaFt2(item.points||[])).toFixed(0)+' sq ft';
   return 'Map pin';
 }
-export default function SiteLogisticsPanel({items,draft,selected,onSelect,onStart,onFinish,onCancel,onBack,onChange,onRemove,onZoom}){
+export default function SiteLogisticsPanel({jumpToken,items,draft,selected,onSelect,onStart,onFinish,onCancel,onBack,onChange,onRemove,onZoom}){
   const [open,setOpen]=useState(true);
+  useEffect(()=>{if(jumpToken>0)setOpen(true);},[jumpToken]);
   const [category,setCategory]=useState('unload');
   const [shape,setShape]=useState('polygon');
   const [label,setLabel]=useState('');
