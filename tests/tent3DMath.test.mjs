@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {tentDimensions,normalizedInterior,getWallSegments,objectPosition} from '../src/tent3DMath.js';
+import {tentDimensions,normalizedInterior,getWallSegments,objectPosition,sitePlacements,siteRadius} from '../src/tent3DMath.js';
 
 test('tent 3D geometry follows saved width and length',()=>{
   assert.deepEqual(tentDimensions({width:30,length:60}),{length:60,width:30});
@@ -49,4 +49,19 @@ test('overlapping doorway openings never produce negative wall pieces',()=>{
     {wall:'left',at:2,width:8},{wall:'left',at:6,width:5}
   ],40,20);
   assert.deepEqual(segments,[{start:8.5,end:20}]);
+});
+
+test('site view preserves physical separation and compass rotation',()=>{
+  const a={id:'a',lng:-90,lat:38,width:20,length:40,rotation:0};
+  const b={id:'b',lng:-89.9999,lat:38,width:20,length:40,rotation:90};
+  const p=sitePlacements([a,b]);
+  assert.equal(p.length,2);
+  assert.ok(p[1].x>0&&p[0].x<0);
+  assert.ok(Math.abs(p[0].z-p[1].z)<.01);
+  assert.ok(Math.abs(p[0].theta-Math.PI/2)<.00001);
+  assert.ok(Math.abs(p[1].theta)<.00001);
+  assert.ok(siteRadius([a,b])>20);
+});
+test('site overview excludes objects without valid location',()=>{
+  assert.equal(sitePlacements([{lng:null,lat:38},{lng:-90,lat:38}]).length,1);
 });
