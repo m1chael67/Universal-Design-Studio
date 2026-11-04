@@ -596,11 +596,11 @@ export default function InteriorPlanner({tent,onChange,onClose}){
         </section>
       </aside>
       <div className="ip-stage" ref={frameRef}>
-        <div className="ip-stage-caption">{mode==='measure'?'MEASURE MODE — click two points':'FLOOR PLAN — DRAG TO POSITION OBJECTS'}</div>
+        <div className="ip-stage-caption">{mode==='measure'?'MEASURE — click two points':selectedIds.length>1?selectedIds.length+' ITEMS SELECTED — drag any highlighted item to move the group':'DRAG TO MOVE • DRAG EMPTY SPACE TO BOX-SELECT • SHIFT+CLICK TO ADD'}</div>
         <div className="ip-scroll-area">
           <svg ref={svgRef} className={'ip-svg '+(mode==='measure'?'ip-measuring':'')}
             style={{width:svgWidth,height:svgHeight,flex:'none'}} viewBox={`${-pad} ${-pad} ${w+pad*2} ${h+pad*2}`}
-            onPointerMove={onMove} onPointerUp={endDrag} onPointerCancel={endDrag}
+            onPointerDown={startMarquee} onPointerMove={onMove} onPointerUp={endDrag} onPointerCancel={endDrag}
             onClick={canvasClick} role="img" aria-label={`Scaled layout of ${w} by ${h} foot tent`}>
             <rect x={-pad} y={-pad} width={w+pad*2} height={h+pad*2} fill="#1b2d38"/>
             <rect x="0" y="0" width={w} height={h} fill="#2c4350"/>
@@ -624,7 +624,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
               return <g key={d.id} className="ip-door" onPointerDown={e=>{
                 if(mode!=='select')return;
                 e.stopPropagation();e.preventDefault();
-                setSelected('door:'+d.id);svgRef.current?.setPointerCapture(e.pointerId);
+                setSelected('door:'+d.id);setSelectedIds([]);svgRef.current?.setPointerCapture(e.pointerId);
                 dragRef.current={action:'door',id:d.id,original:d,start:toPoint(e)};
               }} onClick={e=>e.stopPropagation()}>
                 <line x1={vertical?x:x-half} y1={vertical?y-half:y} x2={vertical?x:x+half} y2={vertical?y+half:y}
@@ -638,7 +638,12 @@ export default function InteriorPlanner({tent,onChange,onClose}){
               <line x1={-Math.max(w,h)} y1="0" x2={Math.max(w,h)} y2="0" stroke="#f0d8a1" strokeWidth=".09" strokeDasharray=".65,.6" opacity=".48"/>
               <line x1="0" y1={-Math.max(w,h)} x2="0" y2={Math.max(w,h)} stroke="#f0d8a1" strokeWidth=".09" strokeDasharray=".65,.6" opacity=".36"/>
             </g>}
-            {layout.objects.map(item=><ItemShape key={item.id} item={item} selected={selected===item.id} outside={exceedsTent(item,w,h)} press={beginDrag}/>)}
+            {layout.objects.map(item=><ItemShape key={item.id} item={item}
+              selected={selectedIds.includes(item.id)||selected===item.id}
+              outside={exceedsTent(item,w,h)} press={beginDrag}/>)}
+            {marquee&&<rect x={Math.min(marquee.start.x,marquee.end.x)} y={Math.min(marquee.start.y,marquee.end.y)}
+              width={Math.abs(marquee.end.x-marquee.start.x)} height={Math.abs(marquee.end.y-marquee.start.y)}
+              stroke="#9ef5e8" strokeWidth=".14" strokeDasharray=".45,.3" fill="#4cd5c2" fillOpacity=".18" pointerEvents="none"/>}
             {chosen&&mode==='select'&&<g pointerEvents="none" className="ip-selected-label">
               <text x={chosen.x} y={Math.max(-1.1,chosen.y-chosen.h/2-2.8)} textAnchor="middle" fill="#fff3d8" fontWeight="700" fontSize=".94"
                 stroke="#152b36" strokeWidth=".7" paintOrder="stroke">{itemDescription(chosen)}</text>
