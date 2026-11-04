@@ -20,7 +20,7 @@ const bbox=o=>{
   return rect(o.x,o.y,cos*(o.w||1)+sin*(o.h||1),sin*(o.w||1)+cos*(o.h||1));
 };
 const isSeating=o=>o.type==='chair'||((o.type==='round'||o.type==='table')&&o.catalog!=='cocktail');
-const clusterSize=t=>t.type==='round'?{w:t.w+3.9,h:t.h+3.9}:{w:t.w+0.8,h:t.h+3.8};
+const clusterSize=t=>t.type==='round'?{w:t.w+4.6,h:t.h+4.6}:{w:t.w+1.5,h:t.h+4.4};
 const normObjects=o=>(Array.isArray(o)?o:[]).filter(x=>Number.isFinite(x.x)&&Number.isFinite(x.y)&&Number.isFinite(x.w)&&Number.isFinite(x.h));
 function doorReservation(d,width,length){
   const vertical=d.wall==='left'||d.wall==='right',wallLen=vertical?width:length;
@@ -35,27 +35,29 @@ function fixtureClearance(o,level){
   // An intentionally conservative AABB is used for rotated items.
   return bbox(o);
 }
-function buildCluster(t,x,y,chairKey){
-  const tag=id();
-  const table={id:tag,catalog:t.key,type:t.type,label:t.name,x,y,w:t.w,h:t.h,rot:0,generatedBy:'optimizer'};
+function buildCluster(t,x,y,chairKey,tableRotation=0){
+  const tag=id(),rot=tableRotation*Math.PI/180;
+  const turn=(dx,dy)=>({x:x+dx*Math.cos(rot)-dy*Math.sin(rot),y:y+dx*Math.sin(rot)+dy*Math.cos(rot)});
+  const table={id:tag,catalog:t.key,type:t.type,label:t.name,x,y,w:t.w,h:t.h,rot:tableRotation,generatedBy:'optimizer'};
   const objects=[table];
-  function chair(cx,cy,rotation){
+  function chair(dx,dy,rotation){
+    const p=turn(dx,dy);
     objects.push({id:id(),catalog:chairKey,type:'chair',
       label:chairKey==='chiavari'?'Chiavari chair':'Folding chair',
-      x:Number(cx.toFixed(3)),y:Number(cy.toFixed(3)),w:1.65,h:1.65,
-      rot:((rotation%360)+360)%360,generatedBy:'optimizer'});
+      x:Number(p.x.toFixed(3)),y:Number(p.y.toFixed(3)),w:1.65,h:1.65,
+      rot:((rotation+tableRotation)%360+360)%360,generatedBy:'optimizer'});
   }
   if(t.type==='round'){
     const radius=t.w/2+1.1;
     for(let i=0;i<t.seats;i++){
-      const angle=-Math.PI/2+(2*Math.PI*i)/t.seats;
-      chair(x+radius*Math.cos(angle),y+radius*Math.sin(angle),angle*180/Math.PI+90);
+      const theta=-Math.PI/2+(2*Math.PI*i)/t.seats;
+      chair(radius*Math.cos(theta),radius*Math.sin(theta),theta*180/Math.PI+90);
     }
   }else{
     const each=t.seats/2,offset=t.h/2+1.05;
     for(let i=0;i<each;i++){
-      const tx=x-t.w/2+(i+1)*t.w/(each+1);
-      chair(tx,y-offset,0);chair(tx,y+offset,180);
+      const tx=-t.w/2+(i+1)*t.w/(each+1);
+      chair(tx,-offset,0);chair(tx,offset,180);
     }
   }
   return objects;
@@ -64,35 +66,39 @@ function tryTable(t,level,layout,width,length,chairKey,mode){
   const old=normObjects(layout.objects),base=mode==='replace'?old.filter(o=>!isSeating(o)):old;
   const obstacleRects=base.map(o=>fixtureClearance(o,level));
   for(const door of layout.doors||[])obstacleRects.push(doorReservation(door,width,length));
-  const dims=clusterSize(t),stepX=dims.w+level.gap,stepY=dims.h+level.gap;
-  const xStart=level.edge+dims.w/2,yStart=level.edge+dims.h/2;
-  let best=[];
-  for(const stagger of [false,true]){
-    for(const xPhase of [0,.25,.5]){
-      for(const yPhase of [0,.25,.5]){
-        const found=[],bounds=[];
-        for(let y=yStart+yPhase*stepY,row=0;y<=width-level.edge-dims.h/2+.0001;y+=stepY,row++){
-          for(let x=xStart+xPhase*stepX+(stagger&&row%2?stepX/2:0);x<=length-level.edge-dims.w/2+.0001;x+=stepX){
-            const r=rect(x,y,dims.w,dims.h);
-            if(obstacleRects.some(b=>overlaps(r,b,level.gap/3)))continue;
-            if(bounds.some(b=>overlaps(r,b,level.gap-.01)))continue;
-            bounds.push(r);found.push([x,y]);
+  let best={centers:[],angle:0,dims:clusterSize(t)};
+  for(const angle of t.type==='table'?[0,90]:[0]){
+    const raw=clusterSize(t),dims=angle===90?{w:raw.h,h:raw.w}:raw;
+    const stepX=dims.w+level.gap,stepY=dims.h+level.gap;
+    const xStart=level.edge+dims.w/2,yStart=level.edge+dims.h/2;
+    for(const stagger of [false,true]){
+      for(const xPhase of [0,.25,.5]){
+        for(const yPhase of [0,.25,.5]){
+          const found=[],bounds=[];
+          for(let y=yStart+yPhase*stepY,row=0;y<=width-level.edge-dims.h/2+.0001;y+=stepY,row++){
+            for(let x=xStart+xPhase*stepX+(stagger&&row%2?stepX/2:0);x<=length-level.edge-dims.w/2+.0001;x+=stepX){
+              const r=rect(x,y,dims.w,dims.h);
+              if(obstacleRects.some(b=>overlaps(r,b,level.gap/3)))continue;
+              if(bounds.some(b=>overlaps(r,b,level.gap-.01)))continue;
+              bounds.push(r);found.push([x,y]);
+              if(found.length>=80)break;
+            }
             if(found.length>=80)break;
           }
-          if(found.length>=80)break;
+          if(found.length>best.centers.length)best={centers:found,angle,dims};
         }
-        if(found.length>best.length)best=found;
       }
     }
   }
-  const created=best.flatMap(([x,y])=>buildCluster(t,x,y,chairKey));
+  const created=best.centers.flatMap(([x,y])=>buildCluster(t,x,y,chairKey,best.angle));
   const newChairs=created.filter(o=>o.type==='chair').length;
   const existingChairs=base.filter(o=>o.type==='chair').length;
-  const seatArea=newChairs*dims.w*dims.h/Math.max(1,t.seats);
+  const seatArea=best.centers.length*best.dims.w*best.dims.h;
   return {
     key:level.key,name:level.name,description:level.description,tableName:t.name,
-    aisleEstimate:level.gap,tableKey:t.key,tableCount:best.length,
+    aisleEstimate:level.gap,tableKey:t.key,tableCount:best.centers.length,
     newChairs,existingChairs,totalSeats:existingChairs+newChairs,
+    tableAngle:best.angle,
     estimatedUsage:Math.round(Math.min(100,seatArea/Math.max(1,width*length)*100)),
     baseObjects:base,newObjects:created,mode
   };
