@@ -509,6 +509,14 @@ function App(){
     setProject(p=>({...p,logistics:(p.logistics||[]).filter(t=>t.id!==id)}));
     if(logisticsSelected===id)setLogisticsSelected(null);
   }
+  function fitEntireSite(){
+    const m=mapRef.current;if(!m)return;
+    const bounds=new mapboxgl.LngLatBounds();
+    for(const t of tents.filter(x=>!x.hidden))corners(t).forEach(p=>bounds.extend(p));
+    for(const item of logistics.filter(x=>!x.hidden))
+      (item.points||[]).forEach(p=>{if(Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))bounds.extend(p);});
+    if(!bounds.isEmpty())m.fitBounds(bounds,{padding:70,maxZoom:20});
+  }
   function zoomToLogistics(item){
     setLogisticsSelected(item.id);setTool('select');
     const m=mapRef.current,pts=Array.isArray(item.points)?item.points:[];
@@ -614,7 +622,8 @@ function App(){
         onSelect={id=>{setLogisticsSelected(id);setSelected(null);setTool('select');}}
         onStart={startLogistics} onFinish={finishLogistics} onCancel={cancelLogistics}
         onBack={()=>setLogisticsDraft(d=>d?{...d,points:d.points.slice(0,-1)}:d)}
-        onChange={updateLogistics} onRemove={removeLogistics} onZoom={zoomToLogistics}/>
+        onChange={updateLogistics} onRemove={removeLogistics} onZoom={zoomToLogistics}
+        onFitAll={fitEntireSite}/>
       </div>
       <section><h3>Tools</h3>
         <div className="grid">
