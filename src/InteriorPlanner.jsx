@@ -21,6 +21,11 @@ const uid=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID()
 const cap=(v,a,b)=>Math.max(a,Math.min(b,v));
 const round=(v,step)=>Math.round(v/step)*step;
 const fmt=n=>Number(n).toFixed(2);
+function exceedsTent(o,w,h){
+  const a=(Number(o.rot)||0)*Math.PI/180, dx=(Math.abs(Math.cos(a))*o.w+Math.abs(Math.sin(a))*o.h)/2,
+    dy=(Math.abs(Math.sin(a))*o.w+Math.abs(Math.cos(a))*o.h)/2;
+  return o.x-dx<-.01||o.x+dx>w+.01||o.y-dy<-.01||o.y+dy>h+.01;
+}
 const norm=(layout)=>({
   objects:Array.isArray(layout?.objects)?layout.objects:[],
   doors:Array.isArray(layout?.doors)?layout.doors:[],
@@ -37,15 +42,16 @@ function XYField({label,value,min=0,max=2000,step=0.25,onCommit}){
   }
   return <label className="ip-field">{label}<input ref={ref} type="number" step={step} min={min} max={max} value={raw} onChange={e=>setRaw(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==='Enter'&&e.currentTarget.blur()}/></label>;
 }
-function ItemShape({item,selected,press}){
+function ItemShape({item,selected,press,outside}){
   const {w,h,type}=item,clr=(CATALOG.find(c=>c.key===item.catalog)?.color)||'#b2c0c9';
   const rounded=type==='round';
+  const outline=outside?'#ff796d':selected?'#ffda8b':'#e8f5f8';
   const caption=type==='chair'?'':type==='round'?'TABLE':type==='stage'?'STAGE':type==='dance'?'DANCE FLOOR':type==='bar'?'BAR':'TABLE';
   const fontSize=Math.max(.5,Math.min(1.05,w/5,h/2.6));
   return <g transform={`translate(${item.x},${item.y}) rotate(${item.rot||0})`}
-    onPointerDown={e=>press(e,'move',item)} className="ip-item" aria-label={item.label}>
-    {rounded?<ellipse rx={w/2} ry={h/2} fill={clr} fillOpacity=".83" stroke={selected?'#ffda8b':'#e8f5f8'} strokeWidth={selected?.2:.08}/>:
-      <rect x={-w/2} y={-h/2} width={w} height={h} rx={type==='chair'?.24:.12} fill={clr} fillOpacity=".85" stroke={selected?'#ffda8b':'#e8f5f8'} strokeWidth={selected?.2:.08}/>}
+    onPointerDown={e=>press(e,'move',item)} onClick={e=>e.stopPropagation()} className="ip-item" aria-label={item.label}>
+    {rounded?<ellipse rx={w/2} ry={h/2} fill={clr} fillOpacity=".83" stroke={outline} strokeWidth={selected?0.2:0.08}/>:
+      <rect x={-w/2} y={-h/2} width={w} height={h} rx={type==='chair'?0.24:0.12} fill={clr} fillOpacity=".85" stroke={outline} strokeWidth={selected?0.2:0.08}/>}
     {type==='chair'&&<path d={`M ${-w*.3} ${-h*.22} L ${w*.3} ${-h*.22}`} stroke="#263a54" strokeWidth=".18" strokeLinecap="round"/>}
     {type==='stage'&&<><path d={`M ${-w/2} ${-h/2} L ${w/2} ${h/2} M ${w/2} ${-h/2} L ${-w/2} ${h/2}`} stroke="#866039" strokeWidth=".08" strokeOpacity=".6"/></>}
     {type==='dance'&&<><path d={`M ${-w/2} 0 H ${w/2} M 0 ${-h/2} V ${h/2}`} stroke="#806180" strokeWidth=".1" strokeDasharray=".7,.4"/></>}
@@ -95,6 +101,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   const pixelsPerFoot=fit*zoom;
   const svgWidth=(w+2*pad)*pixelsPerFoot,svgHeight=(h+2*pad)*pixelsPerFoot;
   const totalChairs=layout.objects.filter(o=>o.type==='chair').length;
+  const outOfBounds=layout.objects.filter(o=>exceedsTent(o,w,h));
   const counts=useMemo(()=>{
     const entries={};
     for(const o of layout.objects){const name=o.label||o.type;entries[name]=(entries[name]||0)+1;}
@@ -166,7 +173,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   }
   function endDrag(e){dragRef.current=null;try{svgRef.current?.releasePointerCapture(e.pointerId);}catch{}}
   function canvasClick(e){
-    if(mode!=='measure'){setSelected(null);return;}
+    if(mode!=='measure')return;
     const p=toPoint(e);if(!p)return;
     const point={x:cap(snap?round(p.x,gridStep):p.x,0,w),y:cap(snap?round(p.y,gridStep):p.y,0,h)};
     if(!measureStart){setMeasureStart(point);setMeasureHover(point);return;}
@@ -232,7 +239,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
             <div className="ip-tool-row"><button onClick={duplicateSelected}>Duplicate</button><button className="ip-danger" onClick={removeSelected}>Delete</button></div>
           </div>:chosenDoor?<div className="ip-fields">
             <strong>Door / entrance</strong>
-            <label className="ip-field">Tent side<select value={chosenDoor.wall} onChange={e=>{const wall=e.target.value;const len=wall==='top'||wall==='bottom'?w:h;updateDoor(chosenDoor.id,{wall,at:len/2});commit({doors:layout.doors.map(d=>d.id===chosenDoor.id?{...d,wall,at:len/2}:d),sidewalls:{...layout.sidewalls,[wall]:true}});}}>
+            <label className="ip-field">Tent side<select value={chosenDoor.wall} onChange={e=>{const wall=e.target.value;const len=wall==='top'||wall==='bottom'?w:h;commit({doors:layout.doors.map(d=>d.id===chosenDoor.id?{...d,wall,at:len/2}:d),sidewalls:{...layout.sidewalls,[wall]:true}});}}>
               {WALLS.map(w=><option key={w} value={w}>{w}</option>)}
             </select></label>
             <XYField key={chosenDoor.id+'dw'} label="Door width (ft)" value={chosenDoor.width} min={1} max={Math.max(w,h)} onCommit={val=>updateDoor(chosenDoor.id,{width:val})}/>
@@ -243,6 +250,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
         <section><h3>Equipment counts</h3>
           <div className="ip-count"><span>Actual chairs placed</span><strong>{totalChairs}</strong></div>
           <div className="ip-count"><span>Doors</span><strong>{layout.doors.length}</strong></div>
+          {outOfBounds.length>0&&<p className="ip-outside-warning">{outOfBounds.length} item{outOfBounds.length>1?'s':''} extend beyond the tent boundary (red outline). Check fit before installing.</p>}
           {counts.map(([name,count])=><div className="ip-count" key={name}><span>{name}</span><strong>{count}</strong></div>)}
           <p className="ip-help">Counts reflect objects added to this layout, not your Booqable inventory. Verify aisle and exit clearances with the authority having jurisdiction.</p>
         </section>
@@ -286,7 +294,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
                 <circle cx={x} cy={y} r=".38" fill="#f5d490" stroke="#102732" strokeWidth=".1"/>
               </g>;
             })}
-            {layout.objects.map(item=><ItemShape key={item.id} item={item} selected={selected===item.id} press={beginDrag}/>)}
+            {layout.objects.map(item=><ItemShape key={item.id} item={item} selected={selected===item.id} outside={exceedsTent(item,w,h)} press={beginDrag}/>)}
             {layout.measurements.map(m=>measureLine(m.a,m.b,m.id))}
             {measureStart&&measureHover&&measureLine(measureStart,measureHover,'preview',true)}
           </svg>
