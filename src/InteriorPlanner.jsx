@@ -51,7 +51,7 @@ function landscape(layout,tentWidth){
 }
 function itemDescription(o){
   if(!o)return '';
-  const fmtSize=n=>Number(n)%1===0?String(n):Number(n).toFixed(2).replace(/0+$/,'').replace(/\\.$/,'');
+  const fmtSize=n=>Number(n)%1===0?String(n):Number(n).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
   if(o.type==='round')return o.catalog==='cocktail'?'Cocktail table ('+fmtSize(o.w)+' ft)':
     (Math.round(Number(o.w)*12)+'″ round table');
   if(o.type==='table')return fmtSize(o.w)+' ft rectangular table';
