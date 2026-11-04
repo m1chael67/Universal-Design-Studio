@@ -489,8 +489,16 @@ export default function InteriorPlanner({tent,onChange,onClose}){
           <button className={mode==='measure'?'selected':''} onClick={()=>{setMode('measure');setSelected(null);setSelectedIds([]);setOptimizerPreview(null);}}>Measure</button>
           <button className={optimizerOpen?'selected':''} onClick={()=>{setOptimizerOpen(x=>!x);setPanels(p=>({...p,catalog:false}));}}>Optimize</button>
         </div>
-        <section><h3>Selected item</h3>
-          {chosen?<div className="ip-fields">
+        <section className="ip-inspector"><h3>Selection</h3>
+          {selectedIds.length>1?<div className="ip-fields">
+            <strong>{selectedIds.length} objects selected</strong>
+            <p className="ip-help">Drag any highlighted object to move the whole selection. Shift-click to add or remove an object.</p>
+            <div className="ip-tool-row">
+              <button onClick={centerSelected}>Center group in tent</button>
+              <button className="ip-danger" onClick={removeSelected}>Delete group</button>
+            </div>
+            <button className="ip-wide" onClick={()=>{setSelected(null);setSelectedIds([]);}}>Clear selection</button>
+          </div>:chosen?<div className="ip-fields">
             <strong>{itemDescription(chosen)}</strong>
             <div className="ip-field-grid">
               <XYField key={chosen.id+'x'} label="X position (ft)" value={Number(chosen.x.toFixed(2))} onCommit={x=>updateObject(chosen.id,{x})} max={w}/>
@@ -514,7 +522,8 @@ export default function InteriorPlanner({tent,onChange,onClose}){
             </label>}
             {alignmentGuide&&<p className="ip-align-readout">Aligned: parallel/perpendicular to {alignmentGuide.source.toLowerCase()}</p>}
             {seatingCount(chosen)>0&&<button className="ip-wide ip-seating-button" onClick={addChairsAround}>+ Add {seatingCount(chosen)} chairs around table</button>}
-            <div className="ip-tool-row"><button onClick={duplicateSelected}>Duplicate</button><button className="ip-danger" onClick={removeSelected}>Delete</button></div>
+            <div className="ip-tool-row"><button onClick={duplicateSelected}>Duplicate</button><button onClick={centerSelected}>Center in tent</button></div>
+            <button className="ip-wide ip-danger" onClick={removeSelected}>Delete selected item</button>
           </div>:chosenDoor?<div className="ip-fields">
             <strong>Door / entrance</strong>
             <label className="ip-field">Tent side<select value={chosenDoor.wall} onChange={e=>{const wall=e.target.value;const len=wall==='top'||wall==='bottom'?w:h;commit({doors:layout.doors.map(d=>d.id===chosenDoor.id?{...d,wall,at:len/2}:d),sidewalls:{...layout.sidewalls,[wall]:true}});}}>
@@ -522,8 +531,23 @@ export default function InteriorPlanner({tent,onChange,onClose}){
             </select></label>
             <XYField key={chosenDoor.id+'dw'} label="Door width (ft)" value={chosenDoor.width} min={1} max={Math.max(w,h)} onCommit={val=>updateDoor(chosenDoor.id,{width:val})}/>
             <XYField key={chosenDoor.id+'da'} label="Position along wall (ft)" value={chosenDoor.at} max={chosenDoor.wall==='top'||chosenDoor.wall==='bottom'?w:h} onCommit={val=>updateDoor(chosenDoor.id,{at:val})}/>
+            <p className="ip-help">Drag the door marker on the wall, or adjust its position here.</p>
             <button className="ip-danger ip-wide" onClick={removeSelected}>Delete door</button>
-          </div>:<p className="ip-help">Select a table, chair, stage, dance floor, or door to edit its dimensions and angle.</p>}
+          </div>:selectedMeasurement?<div className="ip-fields">
+            <strong>Measurement — {fmt(Math.hypot(selectedMeasurement.a.x-selectedMeasurement.b.x,selectedMeasurement.a.y-selectedMeasurement.b.y))} ft</strong>
+            <p className="ip-help">Drag the line to move it, or drag either pin to change the measurement.</p>
+            <div className="ip-field-grid">
+              <XYField key={selectedMeasurement.id+'ax'} label="Start X (ft)" value={Number(selectedMeasurement.a.x.toFixed(2))}
+                max={w} onCommit={x=>updateMeasurement(selectedMeasurement.id,{a:{...selectedMeasurement.a,x}})}/>
+              <XYField key={selectedMeasurement.id+'ay'} label="Start Y (ft)" value={Number(selectedMeasurement.a.y.toFixed(2))}
+                max={h} onCommit={y=>updateMeasurement(selectedMeasurement.id,{a:{...selectedMeasurement.a,y}})}/>
+              <XYField key={selectedMeasurement.id+'bx'} label="End X (ft)" value={Number(selectedMeasurement.b.x.toFixed(2))}
+                max={w} onCommit={x=>updateMeasurement(selectedMeasurement.id,{b:{...selectedMeasurement.b,x}})}/>
+              <XYField key={selectedMeasurement.id+'by'} label="End Y (ft)" value={Number(selectedMeasurement.b.y.toFixed(2))}
+                max={h} onCommit={y=>updateMeasurement(selectedMeasurement.id,{b:{...selectedMeasurement.b,y}})}/>
+            </div>
+            <button className="ip-danger ip-wide" onClick={removeSelected}>Delete measurement</button>
+          </div>:<p className="ip-help">Click an item to edit it. Drag over empty floor space to select several items. Doors and measurements can be selected from the map or their list below.</p>}
         </section>
         <section className="ip-optimizer-section"><button type="button" className="ip-section-toggle" onClick={()=>{setOptimizerOpen(v=>!v);setOptimizerPreview(null);}}>
           <span>Seating Layout Optimizer</span><span>{optimizerOpen?'−':'+'}</span>
