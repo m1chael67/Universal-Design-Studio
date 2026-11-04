@@ -22,10 +22,10 @@ For best protection, create a *dedicated* Mapbox public token with minimum neces
 1. In Appwrite Console, select project **Universal Design Studio** (not the crew app).
 2. Open **Databases** and create a database:
    - Name: `Design Studio`
-   - ID: `design_studio`
+   - ID: `6aeb3dfa001293738040` (already created)
 3. Inside it create a **Table**:
    - Name: `Projects`
-   - ID: `projects`
+   - ID: `6aeb3e0500094b2a9ae4` (already created)
    - **Row Security: ON**
 4. Add these columns (field names are case-sensitive):
 
