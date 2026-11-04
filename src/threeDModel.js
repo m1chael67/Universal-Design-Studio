@@ -11,10 +11,14 @@ const blue=0x9da6ce;
 const mats=new Map();
 const material=(color,opacity=1)=>{
   const key=color+'/'+opacity;
-  if(!mats.has(key))mats.set(key,new THREE.MeshStandardMaterial({
-    color,roughness:.76,metalness:color===STEEL?.47:.04,side:THREE.DoubleSide,
-    transparent:opacity<1,opacity,depthWrite:opacity>=1
-  }));
+  if(!mats.has(key)){
+    const shared=new THREE.MeshStandardMaterial({
+      color,roughness:.76,metalness:color===STEEL?.47:.04,side:THREE.DoubleSide,
+      transparent:opacity<1,opacity,depthWrite:opacity>=1
+    });
+    shared.userData.sharedMaterial=true;
+    mats.set(key,shared);
+  }
   return mats.get(key);
 };
 function cube(root,w,h,d,x,y,z,color,opacity=1){
