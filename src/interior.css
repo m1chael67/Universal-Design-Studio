@@ -72,3 +72,37 @@
 .ip-opt-preview-note button{margin:5px;width:90%}
 .ip-custom-dance{margin:10px 0;font-size:12px;line-height:1.6}
 .ip-align-readout{color:#c5f4d1;background:#2a3e39;padding:8px;border-radius:7px;font-size:12px}
+
+/* V0.7: discoverable selection controls and collapsible tool groups */
+.ip-quick-bar{position:sticky;top:0;z-index:30;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:10px 8px;background:#132a34;border-bottom:1px solid #45636a;box-shadow:0 4px 12px #0b1a2240}
+.ip-quick-bar button{min-width:0;padding:9px 2px;font-size:11px;white-space:nowrap;border-color:#4a7e82;background:#224550}
+.ip-quick-bar button.selected{background:#137b73;border-color:#4bd0be}
+.ip-panel .ip-inspector{background:#1d3741;border:1px solid #3c817b;border-radius:7px;margin:9px 8px;padding:12px}
+.ip-inspector h3{margin:0 0 8px;font-size:12px;color:#b5e5da}
+.ip-inspector .ip-fields>strong{display:block;margin-bottom:6px}
+.ip-inspector .ip-tool-row{gap:5px}
+.ip-inspector .ip-tool-row button{font-size:11px;padding:9px 5px}
+.ip-fold{padding:0!important}
+.ip-fold-trigger{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;padding:15px 16px!important;border:0!important;border-radius:0!important;background:#1a303b!important;color:#e8f5f4;font-weight:700!important;font-size:12px!important}
+.ip-fold-trigger:hover{background:#254550!important}
+.ip-fold-trigger>span:last-child{font-size:19px;line-height:1}
+.ip-fold-trigger small{font-weight:500;color:#a6bfbd}
+.ip-fold-content{padding:12px 15px 15px}
+.ip-list-heading{display:block;font-size:12px;color:#cbe6df;margin:10px 0 4px}
+.ip-annotation-row{display:block;width:100%;text-align:left;margin:4px 0;padding:10px!important;background:#263e48!important;font-size:12px!important}
+.ip-seating-options{border:1px solid #405f68;background:#1e3640;border-radius:8px;margin:12px 0;padding:10px}
+.ip-seating-options>strong{display:block;font-size:12px;margin-bottom:9px}
+.ip-seat-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.ip-seat-settings label{margin:0 0 6px}
+.ip-opt-card{padding:10px}
+.ip-opt-card .ip-opt-head span{color:#b4f4e0}
+.ip-optimizer-section{padding:12px 10px!important}
+.ip-svg .ip-measure-line{cursor:grab}
+.ip-svg .ip-measure-line:active{cursor:grabbing}
+.ip-svg .ip-item{cursor:move}
+.ip-swatch.ip-stairs{background:#e3a97e}
+@media(max-width:650px){
+ .ip-quick-bar{position:sticky;top:0;grid-template-columns:repeat(4,minmax(0,1fr))}
+ .ip-quick-bar button{font-size:11px}
+ .ip-inspector{margin:5px!important}
+}
