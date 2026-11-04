@@ -184,6 +184,26 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   })():null;
   const chosenDoor=layout.doors.find(o=>'door:'+o.id===selected);
   const selectedObjects=layout.objects.filter(o=>selectedIds.includes(o.id));
+  // Editor-specific shortcuts work only while the planner modal is open.
+  useEffect(()=>{
+    function onKey(e){
+      if(e.target?.closest?.('input,textarea,select,[contenteditable="true"]'))return;
+      if(e.key==='Escape'){
+        setSelected(null);setSelectedIds([]);setMarquee(null);setMeasureStart(null);
+        setMode('select');return;
+      }
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){
+        e.preventDefault();setMode('select');setSelected(null);
+        setSelectedIds(layout.objects.map(o=>o.id));return;
+      }
+      if((e.key==='Delete'||e.key==='Backspace')&&(selected||selectedIds.length)){
+        e.preventDefault();removeSelected();
+      }
+    }
+    window.addEventListener('keydown',onKey);
+    return ()=>window.removeEventListener('keydown',onKey);
+  },[selected,selectedIds,layout.objects,layout.doors,layout.measurements]);
+
   const pad=3.5;
   const fit=Math.max(2,Math.min((viewport.width-50)/(w+2*pad),(viewport.height-48)/(h+2*pad)));
   const pixelsPerFoot=fit*zoom;
@@ -663,7 +683,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
         </FoldSection>
       </aside>
       <div className="ip-stage" ref={frameRef}>
-        <div className="ip-stage-caption">{mode==='measure'?'MEASURE — click two points':selectedIds.length>1?selectedIds.length+' ITEMS SELECTED — drag any highlighted item to move the group':'DRAG TO MOVE • DRAG EMPTY SPACE TO BOX-SELECT • SHIFT+CLICK TO ADD'}</div>
+        <div className="ip-stage-caption">{mode==='measure'?'MEASURE — click two points':selectedIds.length>1?selectedIds.length+' ITEMS SELECTED — drag any highlighted item to move the group':'DRAG TO MOVE • BOX-SELECT • SHIFT+CLICK • CTRL/⌘+A SELECT ALL • DELETE TO REMOVE'}</div>
         <div className="ip-scroll-area">
           <svg ref={svgRef} className={'ip-svg '+(mode==='measure'?'ip-measuring':'')}
             style={{width:svgWidth,height:svgHeight,flex:'none'}} viewBox={`${-pad} ${-pad} ${w+pad*2} ${h+pad*2}`}
