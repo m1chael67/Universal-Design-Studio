@@ -222,7 +222,7 @@ function App(){
       m.addSource('tent-dimensions',{type:'geojson',data:fc([])});
       m.addSource('preview-tent',{type:'geojson',data:fc([])});
       m.addSource('preview-clearance',{type:'geojson',data:fc([])});
-      for(const key of ['area','border','route','pins','labels','draft','draftPoints'])
+      for(const key of ['area','border','route','corridor','pins','labels','draft','draftPoints'])
         m.addSource('logistics-'+key,{type:'geojson',data:fc([])});
       m.addLayer({id:'clearance-fill',source:'clearance',type:'fill',paint:{'fill-color':'#ffc46b','fill-opacity':.15}});
       m.addLayer({id:'clearance-line',source:'clearance',type:'line',paint:{'line-color':'#ffc46b','line-width':1.25,'line-dasharray':[3,2]}});
@@ -265,6 +265,8 @@ function App(){
         paint:{'fill-color':['get','color'],'fill-opacity':['case',['==',['get','selected'],1],.43,.23]}});
       m.addLayer({id:'logistics-area-outline',source:'logistics-border',type:'line',
         paint:{'line-color':['get','color'],'line-width':['case',['==',['get','selected'],1],4,2]}});
+      m.addLayer({id:'logistics-route-corridors',source:'logistics-corridor',type:'fill',
+        paint:{'fill-color':['get','color'],'fill-opacity':.19}});
       m.addLayer({id:'logistics-route-lines',source:'logistics-route',type:'line',
         layout:{'line-cap':'round','line-join':'round'},
         paint:{'line-color':['get','color'],'line-width':['case',['==',['get','selected'],1],6,3.5],
