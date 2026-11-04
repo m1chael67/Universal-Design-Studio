@@ -106,3 +106,8 @@
  .ip-quick-bar button{font-size:11px}
  .ip-inspector{margin:5px!important}
 }
+
+.ip-history{display:flex;gap:6px;align-items:center}
+.ip-history button{min-width:66px}
+.ip-history button:disabled{opacity:.35;cursor:not-allowed}
+@media(max-width:650px){.ip-history{order:4}.ip-history button{font-size:12px;padding:8px}}
