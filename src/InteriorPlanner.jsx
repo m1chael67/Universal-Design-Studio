@@ -1,0 +1,298 @@
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import './interior.css';
+
+const CATALOG = [
+  {key:'round5',title:'60″ round table',type:'round',w:5,h:5,color:'#68c5ba'},
+  {key:'round6',title:'72″ round table',type:'round',w:6,h:6,color:'#68c5ba'},
+  {key:'rect6',title:'6 ft banquet table',type:'table',w:6,h:2.5,color:'#68c5ba'},
+  {key:'rect8',title:'8 ft banquet table',type:'table',w:8,h:2.5,color:'#68c5ba'},
+  {key:'cocktail',title:'Cocktail table',type:'round',w:2.5,h:2.5,color:'#68c5ba'},
+  {key:'folding',title:'Folding chair',type:'chair',w:1.65,h:1.65,color:'#9aaddc'},
+  {key:'chiavari',title:'Chiavari chair',type:'chair',w:1.65,h:1.65,color:'#9aaddc'},
+  {key:'stage4x8',title:'Stage 4 × 8',type:'stage',w:8,h:4,color:'#e7b66c'},
+  {key:'stage8x8',title:'Stage 8 × 8',type:'stage',w:8,h:8,color:'#e7b66c'},
+  {key:'dance12',title:'Dance floor 12 × 12',type:'dance',w:12,h:12,color:'#d7a6cb'},
+  {key:'dance16',title:'Dance floor 16 × 16',type:'dance',w:16,h:16,color:'#d7a6cb'},
+  {key:'bar',title:'Bar 8 ft',type:'bar',w:8,h:3,color:'#a4c782'},
+  {key:'buffet',title:'Buffet table 8 ft',type:'table',w:8,h:2.5,color:'#68c5ba'}
+];
+const WALLS=['top','right','bottom','left'];
+const uid=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():'p-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+const cap=(v,a,b)=>Math.max(a,Math.min(b,v));
+const round=(v,step)=>Math.round(v/step)*step;
+const fmt=n=>Number(n).toFixed(2);
+const norm=(layout)=>({
+  objects:Array.isArray(layout?.objects)?layout.objects:[],
+  doors:Array.isArray(layout?.doors)?layout.doors:[],
+  measurements:Array.isArray(layout?.measurements)?layout.measurements:[],
+  sidewalls:{top:false,right:false,bottom:false,left:false,...(layout?.sidewalls||{})}
+});
+function XYField({label,value,min=0,max=2000,step=0.25,onCommit}){
+  const [raw,setRaw]=useState(String(value));
+  const ref=useRef(null);
+  useEffect(()=>{if(document.activeElement!==ref.current)setRaw(String(value));},[value]);
+  function commit(){
+    const n=Number(raw),v=raw.trim()===''||!Number.isFinite(n)?value:cap(n,min,max);
+    onCommit(v);setRaw(String(v));
+  }
+  return <label className="ip-field">{label}<input ref={ref} type="number" step={step} min={min} max={max} value={raw} onChange={e=>setRaw(e.target.value)} onBlur={commit} onKeyDown={e=>e.key==='Enter'&&e.currentTarget.blur()}/></label>;
+}
+function ItemShape({item,selected,press}){
+  const {w,h,type}=item,clr=(CATALOG.find(c=>c.key===item.catalog)?.color)||'#b2c0c9';
+  const rounded=type==='round';
+  const caption=type==='chair'?'':type==='round'?'TABLE':type==='stage'?'STAGE':type==='dance'?'DANCE FLOOR':type==='bar'?'BAR':'TABLE';
+  const fontSize=Math.max(.5,Math.min(1.05,w/5,h/2.6));
+  return <g transform={`translate(${item.x},${item.y}) rotate(${item.rot||0})`}
+    onPointerDown={e=>press(e,'move',item)} className="ip-item" aria-label={item.label}>
+    {rounded?<ellipse rx={w/2} ry={h/2} fill={clr} fillOpacity=".83" stroke={selected?'#ffda8b':'#e8f5f8'} strokeWidth={selected?.2:.08}/>:
+      <rect x={-w/2} y={-h/2} width={w} height={h} rx={type==='chair'?.24:.12} fill={clr} fillOpacity=".85" stroke={selected?'#ffda8b':'#e8f5f8'} strokeWidth={selected?.2:.08}/>}
+    {type==='chair'&&<path d={`M ${-w*.3} ${-h*.22} L ${w*.3} ${-h*.22}`} stroke="#263a54" strokeWidth=".18" strokeLinecap="round"/>}
+    {type==='stage'&&<><path d={`M ${-w/2} ${-h/2} L ${w/2} ${h/2} M ${w/2} ${-h/2} L ${-w/2} ${h/2}`} stroke="#866039" strokeWidth=".08" strokeOpacity=".6"/></>}
+    {type==='dance'&&<><path d={`M ${-w/2} 0 H ${w/2} M 0 ${-h/2} V ${h/2}`} stroke="#806180" strokeWidth=".1" strokeDasharray=".7,.4"/></>}
+    {caption&&<text textAnchor="middle" dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038" pointerEvents="none">{caption}</text>}
+    {selected&&<>
+      <line x1="0" y1={-h/2} x2="0" y2={-h/2-1.6} stroke="#ffdd92" strokeWidth=".16"/>
+      <circle cx="0" cy={-h/2-1.6} r=".68" fill="#ffd078" stroke="#25343d" strokeWidth=".16"
+        className="ip-rotation-handle" onPointerDown={e=>{e.stopPropagation();press(e,'rotate',item);}}/>
+    </>}
+  </g>;
+}
+function wallLine(wall,w,h){
+  if(wall==='top')return [0,0,w,0];
+  if(wall==='right')return [w,0,w,h];
+  if(wall==='bottom')return [0,h,w,h];
+  return [0,0,0,h];
+}
+function doorPosition(d,w,h){
+  const wall=d.wall||'top';
+  const len=(wall==='top'||wall==='bottom')?w:h;
+  const at=cap(Number(d.at)||0,0,len);
+  return wall==='top'?[at,0]:wall==='bottom'?[at,h]:wall==='right'?[w,at]:[0,at];
+}
+export default function InteriorPlanner({tent,onChange,onClose}){
+  const w=Number(tent.width)||20,h=Number(tent.length)||40;
+  const layout=norm(tent.interior);
+  const [selected,setSelected]=useState(null);
+  const [mode,setMode]=useState('select');
+  const [zoom,setZoom]=useState(1);
+  const [gridStep,setGridStep]=useState(0.5);
+  const [snap,setSnap]=useState(true);
+  const [measureStart,setMeasureStart]=useState(null);
+  const [measureHover,setMeasureHover]=useState(null);
+  const [viewport,setViewport]=useState({width:800,height:600});
+  const frameRef=useRef(null),svgRef=useRef(null),dragRef=useRef(null);
+  useEffect(()=>{
+    const el=frameRef.current;if(!el)return;
+    const resize=()=>setViewport({width:el.clientWidth||800,height:el.clientHeight||600});
+    resize();const obs=typeof ResizeObserver!=='undefined'?new ResizeObserver(resize):null;obs?.observe(el);
+    return ()=>obs?.disconnect();
+  },[]);
+  useEffect(()=>{setSelected(null);setMode('select');setMeasureStart(null);setZoom(1);},[tent.id]);
+  const chosen=layout.objects.find(o=>o.id===selected);
+  const chosenDoor=layout.doors.find(o=>'door:'+o.id===selected);
+  const pad=3.5;
+  const fit=Math.max(2,Math.min((viewport.width-50)/(w+2*pad),(viewport.height-48)/(h+2*pad)));
+  const pixelsPerFoot=fit*zoom;
+  const svgWidth=(w+2*pad)*pixelsPerFoot,svgHeight=(h+2*pad)*pixelsPerFoot;
+  const totalChairs=layout.objects.filter(o=>o.type==='chair').length;
+  const counts=useMemo(()=>{
+    const entries={};
+    for(const o of layout.objects){const name=o.label||o.type;entries[name]=(entries[name]||0)+1;}
+    return Object.entries(entries).sort((a,b)=>a[0].localeCompare(b[0]));
+  },[tent.interior]);
+  const grid=[];
+  for(let x=0;x<=w && grid.length<500;x+=5)grid.push({axis:'x',v:x});
+  for(let y=0;y<=h && grid.length<1000;y+=5)grid.push({axis:'y',v:y});
+  function commit(patch){onChange({...layout,...patch});}
+  function updateObject(id,patch){
+    commit({objects:layout.objects.map(o=>o.id===id?{...o,...patch}:o)});
+  }
+  function updateDoor(id,patch){
+    commit({doors:layout.doors.map(d=>d.id===id?{...d,...patch}:d)});
+  }
+  function addObject(cat){
+    const n=layout.objects.length;
+    const obj={id:uid(),catalog:cat.key,type:cat.type,label:cat.title,x:cap(w/2+(n%4)*.75,0,w),
+      y:cap(h/2+(n%3)*.75,0,h),w:cat.w,h:cat.h,rot:0};
+    commit({objects:[...layout.objects,obj]});
+    setSelected(obj.id);setMode('select');
+  }
+  function addDoor(){
+    const wall='top',d={id:uid(),wall,at:w/2,width:Math.min(4,Math.max(1,w/2))};
+    commit({doors:[...layout.doors,d],sidewalls:{...layout.sidewalls,top:true}});
+    setSelected('door:'+d.id);setMode('select');
+  }
+  function removeSelected(){
+    if(!selected)return;
+    if(!window.confirm('Remove the selected item from this tent layout?'))return;
+    if(selected.startsWith('door:'))commit({doors:layout.doors.filter(d=>'door:'+d.id!==selected)});
+    else commit({objects:layout.objects.filter(o=>o.id!==selected)});
+    setSelected(null);
+  }
+  function duplicateSelected(){
+    if(!chosen)return;
+    const o={...chosen,id:uid(),x:cap(chosen.x+2,0,w),y:cap(chosen.y+2,0,h)};
+    commit({objects:[...layout.objects,o]});setSelected(o.id);
+  }
+  function toPoint(e){
+    const svg=svgRef.current;if(!svg)return null;
+    const rect=svg.getBoundingClientRect();
+    const x=(e.clientX-rect.left)/rect.width*(w+pad*2)-pad;
+    const y=(e.clientY-rect.top)/rect.height*(h+pad*2)-pad;
+    return {x,y};
+  }
+  function beginDrag(e,action,item){
+    if(mode!=='select'||e.button!==0)return;
+    e.stopPropagation();e.preventDefault();svgRef.current?.setPointerCapture(e.pointerId);
+    setSelected(item.id);dragRef.current={action,id:item.id,start:toPoint(e),original:item};
+  }
+  function onMove(e){
+    const p=toPoint(e);if(!p)return;
+    if(dragRef.current){
+      const d=dragRef.current;
+      if(d.action==='move'){
+        const x=d.original.x+p.x-d.start.x,y=d.original.y+p.y-d.start.y;
+        updateObject(d.id,{x:cap(snap?round(x,gridStep):x,0,w),y:cap(snap?round(y,gridStep):y,0,h)});
+      } else if(d.action==='rotate'){
+        const degrees=(Math.atan2(p.y-d.original.y,p.x-d.original.x)*180/Math.PI+90+360)%360;
+        updateObject(d.id,{rot:snap?round(degrees,5)%360:Math.round(degrees)});
+      } else if(d.action==='door'){
+        const wall=d.original.wall;
+        updateDoor(d.id,{at:cap(snap?round(wall==='top'||wall==='bottom'?p.x:p.y,gridStep):(wall==='top'||wall==='bottom'?p.x:p.y),0,(wall==='top'||wall==='bottom'?w:h))});
+      }
+      return;
+    }
+    if(mode==='measure'&&measureStart)setMeasureHover({x:cap(p.x,0,w),y:cap(p.y,0,h)});
+  }
+  function endDrag(e){dragRef.current=null;try{svgRef.current?.releasePointerCapture(e.pointerId);}catch{}}
+  function canvasClick(e){
+    if(mode!=='measure'){setSelected(null);return;}
+    const p=toPoint(e);if(!p)return;
+    const point={x:cap(snap?round(p.x,gridStep):p.x,0,w),y:cap(snap?round(p.y,gridStep):p.y,0,h)};
+    if(!measureStart){setMeasureStart(point);setMeasureHover(point);return;}
+    const m={id:uid(),a:measureStart,b:point};
+    if(Math.hypot(m.a.x-m.b.x,m.a.y-m.b.y)>.01)commit({measurements:[...layout.measurements,m]});
+    setMeasureStart(null);setMeasureHover(null);
+  }
+  const measureLine=(a,b,id,temporary=false)=>{
+    const d=Math.hypot(a.x-b.x,a.y-b.y);
+    return <g key={id} pointerEvents="none">
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={temporary?'#ffda8c':'#ecf4f5'} strokeWidth=".17" strokeDasharray=".55,.25"/>
+      <circle cx={a.x} cy={a.y} r=".36" fill="#ffd57e"/><circle cx={b.x} cy={b.y} r=".36" fill="#ffd57e"/>
+      <text x={(a.x+b.x)/2} y={(a.y+b.y)/2-.65} fontSize=".83" textAnchor="middle" paintOrder="stroke" stroke="#21303e" strokeWidth=".55" fill="#fff">{fmt(d)} ft</text>
+    </g>;
+  };
+  const exportSvg=()=>{
+    const svg=svgRef.current;if(!svg)return;
+    const clone=svg.cloneNode(true);
+    clone.setAttribute('xmlns','http://www.w3.org/2000/svg');clone.removeAttribute('style');
+    clone.setAttribute('width',String(Math.round(svgWidth)));clone.setAttribute('height',String(Math.round(svgHeight)));
+    const blob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'});
+    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;
+    a.download=(tent.name||'Tent').replace(/[^a-z0-9_-]+/gi,'-')+'-floor-plan.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  return <div className="ip-shell" role="dialog" aria-modal="true" aria-label="Tent interior floor planner">
+    <header className="ip-header">
+      <button className="ip-back" onClick={onClose}>← Back to site</button>
+      <div className="ip-heading"><strong>{tent.name?.trim()||'Tent interior'}</strong><span>{w} × {h} ft · {fmt(w*h)} sq ft</span></div>
+      <div className="ip-zoom">
+        <button onClick={()=>setZoom(z=>cap(z/1.25,.25,12))} title="Zoom out">−</button>
+        <span>{Math.round(zoom*100)}%</span>
+        <button onClick={()=>setZoom(z=>cap(z*1.25,.25,12))} title="Zoom in">+</button>
+        <button onClick={()=>setZoom(1)}>Fit</button>
+      </div>
+      <button onClick={exportSvg}>Export floor plan SVG</button>
+    </header>
+    <div className="ip-workspace">
+      <aside className="ip-panel">
+        <section><h3>Add equipment</h3><div className="ip-catalog">
+          {CATALOG.map(cat=><button key={cat.key} onClick={()=>addObject(cat)} title={cat.title}><span className={'ip-swatch ip-'+cat.type}/><span>{cat.title}</span></button>)}
+        </div></section>
+        <section><h3>Doors & sidewalls</h3>
+          <button className="ip-wide" onClick={addDoor}>+ Add door / entrance</button>
+          <p className="ip-help">Toggle each wall. Select a door below to choose its wall, width and position.</p>
+          <div className="ip-wall-grid">{WALLS.map(wall=><label key={wall}><input type="checkbox" checked={Boolean(layout.sidewalls[wall])} onChange={e=>commit({sidewalls:{...layout.sidewalls,[wall]:e.target.checked}})}/>{wall}</label>)}</div>
+        </section>
+        <section><h3>Tools</h3>
+          <div className="ip-tool-row"><button className={mode==='select'?'selected':''} onClick={()=>{setMode('select');setMeasureStart(null);}}>Select / move</button><button className={mode==='measure'?'selected':''} onClick={()=>{setMode('measure');setSelected(null);}}>Measure</button></div>
+          <label className="ip-check"><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/>Snap to grid</label>
+          <label className="ip-field">Grid step <select value={gridStep} onChange={e=>setGridStep(+e.target.value)}><option value=".25">3 in</option><option value=".5">6 in</option><option value="1">1 ft</option></select></label>
+          <p className="ip-help">{mode==='measure'?'Click the first point, move for a live distance, then click a second point.':'Drag items to move them. Select an item and drag its gold handle to rotate.'}</p>
+        </section>
+        <section><h3>Selected item</h3>
+          {chosen?<div className="ip-fields">
+            <strong>{chosen.label}</strong>
+            <div className="ip-field-grid">
+              <XYField key={chosen.id+'x'} label="X position (ft)" value={Number(chosen.x.toFixed(2))} onCommit={x=>updateObject(chosen.id,{x})} max={w}/>
+              <XYField key={chosen.id+'y'} label="Y position (ft)" value={Number(chosen.y.toFixed(2))} onCommit={y=>updateObject(chosen.id,{y})} max={h}/>
+              <XYField key={chosen.id+'w'} label="Width (ft)" value={chosen.w} min={.25} onCommit={val=>updateObject(chosen.id,{w:val})}/>
+              <XYField key={chosen.id+'h'} label="Depth (ft)" value={chosen.h} min={.25} onCommit={val=>updateObject(chosen.id,{h:val})}/>
+              <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
+            </div>
+            <div className="ip-tool-row"><button onClick={duplicateSelected}>Duplicate</button><button className="ip-danger" onClick={removeSelected}>Delete</button></div>
+          </div>:chosenDoor?<div className="ip-fields">
+            <strong>Door / entrance</strong>
+            <label className="ip-field">Tent side<select value={chosenDoor.wall} onChange={e=>{const wall=e.target.value;const len=wall==='top'||wall==='bottom'?w:h;updateDoor(chosenDoor.id,{wall,at:len/2});commit({doors:layout.doors.map(d=>d.id===chosenDoor.id?{...d,wall,at:len/2}:d),sidewalls:{...layout.sidewalls,[wall]:true}});}}>
+              {WALLS.map(w=><option key={w} value={w}>{w}</option>)}
+            </select></label>
+            <XYField key={chosenDoor.id+'dw'} label="Door width (ft)" value={chosenDoor.width} min={1} max={Math.max(w,h)} onCommit={val=>updateDoor(chosenDoor.id,{width:val})}/>
+            <XYField key={chosenDoor.id+'da'} label="Position along wall (ft)" value={chosenDoor.at} max={chosenDoor.wall==='top'||chosenDoor.wall==='bottom'?w:h} onCommit={val=>updateDoor(chosenDoor.id,{at:val})}/>
+            <button className="ip-danger ip-wide" onClick={removeSelected}>Delete door</button>
+          </div>:<p className="ip-help">Select a table, chair, stage, dance floor, or door to edit its dimensions and angle.</p>}
+        </section>
+        <section><h3>Equipment counts</h3>
+          <div className="ip-count"><span>Actual chairs placed</span><strong>{totalChairs}</strong></div>
+          <div className="ip-count"><span>Doors</span><strong>{layout.doors.length}</strong></div>
+          {counts.map(([name,count])=><div className="ip-count" key={name}><span>{name}</span><strong>{count}</strong></div>)}
+          <p className="ip-help">Counts reflect objects added to this layout, not your Booqable inventory. Verify aisle and exit clearances with the authority having jurisdiction.</p>
+        </section>
+      </aside>
+      <div className="ip-stage" ref={frameRef}>
+        <div className="ip-stage-caption">{mode==='measure'?'MEASURE MODE — click two points':'FLOOR PLAN — DRAG TO POSITION OBJECTS'}</div>
+        <div className="ip-scroll-area">
+          <svg ref={svgRef} className={'ip-svg '+(mode==='measure'?'ip-measuring':'')}
+            style={{width:svgWidth,height:svgHeight,flex:'none'}} viewBox={`${-pad} ${-pad} ${w+pad*2} ${h+pad*2}`}
+            onPointerMove={onMove} onPointerUp={endDrag} onPointerCancel={endDrag}
+            onClick={canvasClick} role="img" aria-label={`Scaled layout of ${w} by ${h} foot tent`}>
+            <rect x={-pad} y={-pad} width={w+pad*2} height={h+pad*2} fill="#1b2d38"/>
+            <rect x="0" y="0" width={w} height={h} fill="#2c4350"/>
+            {grid.map((a,i)=><line key={i} x1={a.axis==='x'?a.v:0} y1={a.axis==='x'?0:a.v}
+              x2={a.axis==='x'?a.v:w} y2={a.axis==='x'?h:a.v}
+              stroke="#708590" strokeOpacity=".22" strokeWidth=".06"/>)}
+            {WALLS.map(wall=>{
+              const [x1,y1,x2,y2]=wallLine(wall,w,h);
+              return <line key={wall} x1={x1} y1={y1} x2={x2} y2={y2} stroke={layout.sidewalls[wall]?'#f0f3f4':'#a9c2c9'}
+                strokeWidth={layout.sidewalls[wall]?.25:.17} strokeDasharray={layout.sidewalls[wall]?undefined:'.6,.4'}/>;
+            })}
+            <g pointerEvents="none">
+              <text x={w/2} y={-1.25} textAnchor="middle" fontSize="1" fill="#e3f0f0">{fmt(w)} ft</text>
+              <text x={-1.7} y={h/2} transform={`rotate(-90 ${-1.7} ${h/2})`} textAnchor="middle" fontSize="1" fill="#e3f0f0">{fmt(h)} ft</text>
+            </g>
+            {layout.doors.map(d=>{
+              const [x,y]=doorPosition(d,w,h);
+              const vertical=d.wall==='left'||d.wall==='right';
+              const length=vertical?h:w;
+              const half=cap(Number(d.width)||4,1,length)/2;
+              return <g key={d.id} className="ip-door" onPointerDown={e=>{
+                if(mode!=='select')return;
+                e.stopPropagation();e.preventDefault();
+                setSelected('door:'+d.id);svgRef.current?.setPointerCapture(e.pointerId);
+                dragRef.current={action:'door',id:d.id,original:d,start:toPoint(e)};
+              }} onClick={e=>e.stopPropagation()}>
+                <line x1={vertical?x:x-half} y1={vertical?y-half:y} x2={vertical?x:x+half} y2={vertical?y+half:y}
+                  stroke="#2c4350" strokeWidth=".58"/>
+                <line x1={vertical?x:x-half} y1={vertical?y-half:y} x2={vertical?x:x+half} y2={vertical?y+half:y}
+                  stroke={selected==='door:'+d.id?'#ffd078':'#f5d490'} strokeWidth=".17" strokeDasharray=".5,.3"/>
+                <circle cx={x} cy={y} r=".38" fill="#f5d490" stroke="#102732" strokeWidth=".1"/>
+              </g>;
+            })}
+            {layout.objects.map(item=><ItemShape key={item.id} item={item} selected={selected===item.id} press={beginDrag}/>)}
+            {layout.measurements.map(m=>measureLine(m.a,m.b,m.id))}
+            {measureStart&&measureHover&&measureLine(measureStart,measureHover,'preview',true)}
+          </svg>
+        </div>
+        <div className="ip-stage-footer"><span>Origin: upper-left corner · Dimensions in feet</span><span>Zoom: {Math.round(zoom*100)}% · Snap {snap?'on':'off'}</span></div>
+      </div>
+    </div>
+  </div>;
+}
