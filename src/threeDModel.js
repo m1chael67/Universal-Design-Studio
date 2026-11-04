@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {westCoastProfile} from './westCoastProfile.js';
 import {clamp,normalizedInterior,tentDimensions,getWallSegments,objectPosition,sitePlacements,siteRadius} from './tent3DMath.js';
 
 const STEEL=0x86969b;
@@ -74,6 +75,67 @@ function addStructure(root,{length,width,eave,ridge,bays,roofMode,frameVisible})
     post(root,[x,ridge+.03,0],[x,eave+.03,width/2],.019,0xb9c0bc);
   }
 }
+
+// West Coast frame: four sloped hip corners, short ridge, intermediate ridge
+// crowns and perimeter tees. The four roof planes are triangulated separately.
+function westCoastRoof(root,p,opacity){
+  const {length,width,eave,ridge,left,right}=p;
+  const a=-length/2,b=length/2,d=width/2;
+  const triangles=[
+    // two long trapezoidal roof slopes
+    [a,eave,-d,b,eave,-d,right,ridge,0],
+    [a,eave,-d,right,ridge,0,left,ridge,0],
+    [a,eave,d,left,ridge,0,right,ridge,0],
+    [a,eave,d,right,ridge,0,b,eave,d],
+    // hipped end caps
+    [a,eave,-d,left,ridge,0,a,eave,d],
+    [b,eave,-d,b,eave,d,right,ridge,0]
+  ];
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(triangles.flat(),3));
+  geometry.computeVertexNormals();
+  const canopy=new THREE.Mesh(geometry,material(WHITE,opacity));
+  canopy.castShadow=true;canopy.receiveShadow=true;root.add(canopy);
+}
+function addWestCoastStructure(root,{length,width,eave,roofMode,frameVisible}){
+  const p=westCoastProfile(length,width,eave),d=width/2,a=-length/2,b=length/2;
+  if(roofMode!=='hidden')westCoastRoof(root,p,roofMode==='xray'?.23:.89);
+  if(!frameVisible)return p;
+  // Side spreaders, hip corner fittings, side tees and vertical leg positions.
+  for(const z of [-d,d]){
+    post(root,[a,eave,z],[b,eave,z],.085);
+    for(const x of p.legXs){
+      post(root,[x,0,z],[x,eave,z],.085);
+      cube(root,.48,.07,.48,x,.035,z,STEEL);
+    }
+  }
+  // End spreaders close the rectangular eave perimeter.
+  for(const x of [a,b])post(root,[x,eave,-d],[x,eave,d],.085);
+  if(p.right>p.left+.01)post(root,[p.left,p.ridge,0],[p.right,p.ridge,0],.09);
+  // Four long diagonal hip rafters (not gable triangles).
+  for(const x of [a,b])for(const z of [-d,d]){
+    const crownX=x===a?p.left:p.right;
+    post(root,[x,eave,z],[crownX,p.ridge,0],.08);
+  }
+  // Main transverse rafters run from side tees to ridge crowns.
+  for(const x of p.xs){
+    if(x<p.left-.01||x>p.right+.01)continue;
+    for(const z of [-d,d])post(root,[x,eave,z],[x,p.ridge,0],.077);
+  }
+  // Ridge crowns at both hips, with evenly spaced intermediate crowns.
+  for(const x of p.ridgeXs){
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(.15,8,6),material(STEEL));
+    crown.position.set(x,p.ridge,0);root.add(crown);
+  }
+  if(roofMode!=='hidden'){
+    for(const x of p.xs){
+      if(x<=p.left+.01||x>=p.right-.01)continue;
+      for(const z of [-d,d])post(root,[x,eave+.025,z],[x,p.ridge+.025,0],.016,0xb6bdbb);
+    }
+  }
+  return p;
+}
+
 function addWall(root,wall,interior,length,width,eave){
   const {segments,openings,span}=getWallSegments(wall,interior.doors,length,width);
   const wallThickness=.045;
@@ -168,11 +230,13 @@ export function buildTentScene(scene,tent,options={}){
   const {length,width}=tentDimensions(tent);
   const layout=normalizedInterior(tent);
   const legHeight=clamp(Number(options.legHeight)||7,7,16);
-  const roofStyle=options.roofStyle||'gable';
-  const ridge=legHeight+(roofStyle==='flat'?0:Math.min(18,width*(roofStyle==='highpeak'?.48:.27)));
+  const roofStyle=options.roofStyle||'westcoast';
+  const ridge=legHeight+(roofStyle==='westcoast'?Math.min(length,width)*.25:roofStyle==='flat'?0:Math.min(18,width*(roofStyle==='highpeak'?.48:.27)));
   const bays=Math.max(1,Math.ceil(length/clamp(Number(options.baySpacing)||20,8,30)));
   const root=new THREE.Group();scene.add(root);
-  addStructure(root,{length,width,eave:legHeight,ridge,bays,roofMode:options.roofMode||'solid',
+  if(roofStyle==='westcoast')addWestCoastStructure(root,{length,width,eave:legHeight,
+    roofMode:options.roofMode||'solid',frameVisible:options.frameVisible!==false});
+  else addStructure(root,{length,width,eave:legHeight,ridge,bays,roofMode:options.roofMode||'solid',
     frameVisible:options.frameVisible!==false});
   const walls=options.wallVisible===false?{rendered:0,doors:0}:addSidewalls(root,layout,length,width,legHeight);
   const pickables=options.furnitureVisible===false?[]:addFurniture(root,layout,length,width);
