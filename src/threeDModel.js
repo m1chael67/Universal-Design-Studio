@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {clamp,normalizedInterior,tentDimensions,getWallSegments,objectPosition} from './tent3DMath.js';
+import {clamp,normalizedInterior,tentDimensions,getWallSegments,objectPosition,sitePlacements,siteRadius} from './tent3DMath.js';
 
 const STEEL=0x86969b;
 const WHITE=0xf1f0e9;
@@ -177,4 +177,27 @@ export function buildTentScene(scene,tent,options={}){
   const walls=options.wallVisible===false?{rendered:0,doors:0}:addSidewalls(root,layout,length,width,legHeight);
   const pickables=options.furnitureVisible===false?[]:addFurniture(root,layout,length,width);
   return {length,width,eave:legHeight,ridge,bays,walls,pickables,visibleObjects:pickables.length,root};
+}
+
+export function buildSiteScene(scene,tents,options={}){
+  const placements=sitePlacements(tents);
+  const pickables=[];
+  let visibleObjects=0,bays=0;
+  for(const p of placements){
+    const anchor=new THREE.Group();
+    anchor.position.set(p.x,0,p.z);
+    anchor.rotation.y=p.theta;
+    scene.add(anchor);
+    const part=buildTentScene(anchor,p.tent,options);
+    for(const group of part.pickables){
+      if(group.userData?.item){
+        group.userData.item={...group.userData.item,
+          title:(p.tent.name||p.tent.width+' × '+p.tent.length+' tent')+' · '+group.userData.item.title};
+      }
+      pickables.push(group);
+    }
+    visibleObjects+=part.visibleObjects;
+    bays+=part.bays;
+  }
+  return {pickables,visibleObjects,bays,radius:siteRadius(tents),tents:placements.length,root:scene};
 }
