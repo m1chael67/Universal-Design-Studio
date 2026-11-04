@@ -248,7 +248,7 @@ export default function ThreeDViewer({tents,onClose}){
           {!siteMode&&summary?.frameProfile&&<span>{summary.frameProfile.verifiedFamily?summary.frameProfile.family+' reference':'Custom size · approximate frame'} · {summary.frameProfile.legCount} perimeter legs</span>}
         </div>}
         {selectedItem&&<div className="three-d-selected"><div><strong>{selectedItem.title}</strong>
-          <span>{selectedItem.width.toFixed(1)} × {selectedItem.depth.toFixed(1)} ft · {selectedItem.type}</span></div>
+          <span>{selectedItem.width.toFixed(1)} × {selectedItem.depth.toFixed(1)} ft · {selectedItem.type}{selectedItem.heightInches!=null?' · '+selectedItem.heightInches+'″ high':''}</span></div>
           <button type="button" aria-label="Dismiss selected furniture" onClick={()=>setSelectedItem(null)}>×</button></div>}
       </div>
       <footer>{error&&<p role="alert">{error}</p>}
