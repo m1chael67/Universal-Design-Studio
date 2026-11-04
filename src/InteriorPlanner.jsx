@@ -133,6 +133,19 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     if(tent.interior?.orientation!=='landscape-v1')onChange(landscape(tent.interior,Number(tent.width)||20));
   },[tent.id,tent.interior?.orientation]);
   const chosen=layout.objects.find(o=>o.id===selected);
+  const alignmentGuide=chosen?(()=>{
+    const angle=((chosen.rot||0)%360+360)%360;
+    const candidates=[{angle:0,source:'Tent walls'},{angle:90,source:'Tent walls'},
+      ...layout.objects.filter(o=>o.id!==chosen.id).flatMap(o=>([
+        {angle:(o.rot||0),source:'Another item'},
+        {angle:(o.rot||0)+90,source:'Another item'}
+      ]))];
+    const hit=candidates.find(c=>{
+      const delta=Math.abs(((angle-c.angle+180)%180+180)%180);
+      return Math.min(delta,180-delta)<.9;
+    });
+    return hit?{angle,source:hit.source}:null;
+  })():null;
   const chosenDoor=layout.doors.find(o=>'door:'+o.id===selected);
   const pad=3.5;
   const fit=Math.max(2,Math.min((viewport.width-50)/(w+2*pad),(viewport.height-48)/(h+2*pad)));
@@ -161,6 +174,25 @@ export default function InteriorPlanner({tent,onChange,onClose}){
   }
   function updateObject(id,patch){
     commit({objects:layout.objects.map(o=>o.id===id?{...o,...patch}:o)});
+  }
+  function updateModuleSize(item,field,value){
+    const size=item.type==='stage'?4:item.type==='dance'&&!item.customSize?3:0.25;
+    const n=Number.isFinite(Number(value))?Number(value):item[field];
+    const corrected=Math.max(size,Math.round(n/size)*size);
+    updateObject(item.id,{[field]:Number(corrected.toFixed(2))});
+  }
+  function alignRotation(angle,item){
+    let target=Number(angle);
+    if(!snap)return Math.round(target);
+    const angles=[0,90,180,270,360,
+      ...layout.objects.filter(o=>o.id!==item.id).flatMap(o=>[o.rot||0,(o.rot||0)+90,(o.rot||0)+180,(o.rot||0)+270])];
+    let best=null,distance=Infinity;
+    for(const a of angles){
+      const diff=Math.abs((target-a+540)%360-180);
+      if(diff<distance){distance=diff;best=a;}
+    }
+    if(distance<=2.5)return ((best%360)+360)%360;
+    return (Math.round(target/5)*5)%360;
   }
   function updateDoor(id,patch){
     commit({doors:layout.doors.map(d=>d.id===id?{...d,...patch}:d)});
@@ -243,7 +275,7 @@ export default function InteriorPlanner({tent,onChange,onClose}){
         updateObject(d.id,{x:cap(snap?round(x,gridStep):x,0,w),y:cap(snap?round(y,gridStep):y,0,h)});
       } else if(d.action==='rotate'){
         const degrees=(Math.atan2(p.y-d.original.y,p.x-d.original.x)*180/Math.PI+90+360)%360;
-        updateObject(d.id,{rot:snap?round(degrees,5)%360:Math.round(degrees)});
+        updateObject(d.id,{rot:alignRotation(degrees,d.original)});
       } else if(d.action==='door'){
         const wall=d.original.wall;
         updateDoor(d.id,{at:cap(snap?round(wall==='top'||wall==='bottom'?p.x:p.y,gridStep):(wall==='top'||wall==='bottom'?p.x:p.y),0,(wall==='top'||wall==='bottom'?w:h))});
@@ -386,10 +418,24 @@ export default function InteriorPlanner({tent,onChange,onClose}){
             <div className="ip-field-grid">
               <XYField key={chosen.id+'x'} label="X position (ft)" value={Number(chosen.x.toFixed(2))} onCommit={x=>updateObject(chosen.id,{x})} max={w}/>
               <XYField key={chosen.id+'y'} label="Y position (ft)" value={Number(chosen.y.toFixed(2))} onCommit={y=>updateObject(chosen.id,{y})} max={h}/>
-              <XYField key={chosen.id+'w'} label="Width (ft)" value={chosen.w} min={.25} onCommit={val=>updateObject(chosen.id,{w:val})}/>
-              <XYField key={chosen.id+'h'} label="Depth (ft)" value={chosen.h} min={.25} onCommit={val=>updateObject(chosen.id,{h:val})}/>
+              <XYField key={chosen.id+'w'} label={chosen.type==='stage'?'Width (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Width (3 ft increments)':'Width (ft)'}
+                value={chosen.w} min={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+                step={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+                onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'w',val):updateObject(chosen.id,{w:val})}/>
+              <XYField key={chosen.id+'h'} label={chosen.type==='stage'?'Depth (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Depth (3 ft increments)':'Depth (ft)'}
+                value={chosen.h} min={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+                step={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+                onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'h',val):updateObject(chosen.id,{h:val})}/>
               <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
             </div>
+            {chosen.type==='stage'&&<p className="ip-help">Bil-Jax: stage width and depth are made from 4 × 4 ft modules. The size fields round to 4-foot increments.</p>}
+            {chosen.type==='dance'&&<label className="ip-check ip-custom-dance">
+              <input type="checkbox" checked={Boolean(chosen.customSize)} onChange={e=>updateObject(chosen.id,{
+                customSize:e.target.checked,
+                ...(e.target.checked?{}:{w:Math.max(3,Math.round(chosen.w/3)*3),h:Math.max(3,Math.round(chosen.h/3)*3)})
+              })}/>Allow custom dance-floor sizes (otherwise 3 × 3 ft modules)
+            </label>}
+            {alignmentGuide&&<p className="ip-align-readout">Aligned: parallel/perpendicular to {alignmentGuide.source.toLowerCase()}</p>}
             {seatingCount(chosen)>0&&<button className="ip-wide ip-seating-button" onClick={addChairsAround}>+ Add {seatingCount(chosen)} chairs around table</button>}
             <div className="ip-tool-row"><button onClick={duplicateSelected}>Duplicate</button><button className="ip-danger" onClick={removeSelected}>Delete</button></div>
           </div>:chosenDoor?<div className="ip-fields">
@@ -449,7 +495,15 @@ export default function InteriorPlanner({tent,onChange,onClose}){
                 <circle cx={x} cy={y} r=".38" fill="#f5d490" stroke="#102732" strokeWidth=".1"/>
               </g>;
             })}
+            {alignmentGuide&&chosen&&mode==='select'&&<g transform={`translate(${chosen.x} ${chosen.y}) rotate(${alignmentGuide.angle})`} pointerEvents="none" className="ip-align-guides">
+              <line x1={-Math.max(w,h)} y1="0" x2={Math.max(w,h)} y2="0" stroke="#f0d8a1" strokeWidth=".09" strokeDasharray=".65,.6" opacity=".48"/>
+              <line x1="0" y1={-Math.max(w,h)} x2="0" y2={Math.max(w,h)} stroke="#f0d8a1" strokeWidth=".09" strokeDasharray=".65,.6" opacity=".36"/>
+            </g>}
             {layout.objects.map(item=><ItemShape key={item.id} item={item} selected={selected===item.id} outside={exceedsTent(item,w,h)} press={beginDrag}/>)}
+            {chosen&&mode==='select'&&<g pointerEvents="none" className="ip-selected-label">
+              <text x={chosen.x} y={Math.max(-1.1,chosen.y-chosen.h/2-2.8)} textAnchor="middle" fill="#fff3d8" fontWeight="700" fontSize=".94"
+                stroke="#152b36" strokeWidth=".7" paintOrder="stroke">{itemDescription(chosen)}</text>
+            </g>}
             {optimizerPreview&&<g pointerEvents="none" opacity=".55" aria-label="Suggested seating preview">
               {optimizerPreview.newObjects.map(item=><ItemShape key={item.id} item={item} selected={false} outside={exceedsTent(item,w,h)} press={()=>{}}/>)}
             </g>}
