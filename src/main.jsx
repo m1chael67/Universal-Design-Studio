@@ -93,7 +93,9 @@ function fromStore(key,defaultValue){try{const value=localStorage.getItem(key);r
 function App(){
   const [project,setProject]=useState(()=>fromStore('uds-project',{name:'New site plan',center:[-90.1994,38.627],zoom:17,tents:[]}));
   const [tokenText,setTokenText]=useState(()=>localStorage.getItem('uds-mapbox-token')||'');
-  const [token,setToken]=useState('');
+  const [token,setToken]=useState(()=>{
+    try{const saved=localStorage.getItem('uds-mapbox-token')||'';return saved.startsWith('pk.')?saved:'';}catch{return '';}
+  });
   const [mapStyle,setMapStyle]=useState('satellite');
   const [status,setStatus]=useState('Enter a Mapbox public token to begin.');
   const [imageryAccess,setImageryAccess]=useState('unknown');
@@ -112,7 +114,7 @@ function App(){
   const [clearanceDraft,setClearanceDraft]=useState('4');
   const [width,setWidth]=useState('20'),[length,setLength]=useState('40'),[rotation,setRotation]=useState('0'),[clearance,setClearance]=useState('4');
   const mapDiv=useRef(null),mapRef=useRef(null),ready=useRef(false),drag=useRef(null),live=useRef({});
-  const addSectionRef=useRef(null);
+  const addSectionRef=useRef(null),editorRef=useRef(null);
   const tents=Array.isArray(project.tents)?project.tents:[];
   const chosen=tents.find(t=>t.id===selected);
   live.current={tool,tents,points,measureCursor,measureClosed,nearStart,selected,width,length,rotation,clearance,pendingTent};
@@ -126,6 +128,11 @@ function App(){
     }
   },[selected]);
   useEffect(()=>{try{localStorage.setItem('uds-project',JSON.stringify(project));}catch{}},[project]);
+  useEffect(()=>{
+    if(!selected)return;
+    const frame=requestAnimationFrame(()=>editorRef.current?.scrollIntoView({block:'nearest',behavior:'smooth'}));
+    return ()=>cancelAnimationFrame(frame);
+  },[selected]);
   // The raster satellite tileset is unavailable on some Mapbox Demo accounts,
   // even when vector-based street styles work. Check the actual tileset response
   // so the UI does not incorrectly suggest switching styles will solve it.
@@ -167,6 +174,7 @@ function App(){
       ready.current=true;
       m.addSource('clearance',{type:'geojson',data:fc([])});
       m.addSource('tents',{type:'geojson',data:fc([])});
+      m.addSource('selected-tent',{type:'geojson',data:fc([])});
       m.addSource('measure',{type:'geojson',data:fc([])});
       m.addSource('measure-preview',{type:'geojson',data:fc([])});
       m.addSource('measure-pins',{type:'geojson',data:fc([])});
@@ -178,6 +186,8 @@ function App(){
       m.addLayer({id:'clearance-line',source:'clearance',type:'line',paint:{'line-color':'#ffc46b','line-width':1.25,'line-dasharray':[3,2]}});
       m.addLayer({id:'tent-fill',source:'tents',type:'fill',paint:{'fill-color':'#46dccb','fill-opacity':.38}});
       m.addLayer({id:'tent-outline',source:'tents',type:'line',paint:{'line-color':'#d8fff9','line-width':1.5}});
+      m.addLayer({id:'selected-tent-fill',source:'selected-tent',type:'fill',paint:{'fill-color':'#ffce7d','fill-opacity':0.22}});
+      m.addLayer({id:'selected-tent-border',source:'selected-tent',type:'line',paint:{'line-color':'#ffd078','line-width':3}});
       m.addLayer({id:'measure-line',source:'measure',type:'line',paint:{'line-color':'#ffffff','line-width':2,'line-dasharray':[3,1]}});
       m.addLayer({id:'measure-preview-line',source:'measure-preview',type:'line',paint:{'line-color':'#ffffff','line-width':2,'line-dasharray':[1,1]}});
       m.addLayer({id:'measure-pin-circles',source:'measure-pins',type:'circle',paint:{
@@ -201,9 +211,11 @@ function App(){
     function sync(){
       if(!ready.current)return;
       const current=live.current;
-      m.getSource('tents')?.setData(polygonLayer(current.tents));
-      m.getSource('clearance')?.setData(polygonLayer(current.tents,true));
-      m.getSource('tent-dimensions')?.setData(tentDimensionLabels(current.tents));
+      const visibleTents=current.tents.filter(t=>!t.hidden);
+      m.getSource('tents')?.setData(polygonLayer(visibleTents));
+      m.getSource('clearance')?.setData(polygonLayer(visibleTents,true));
+      m.getSource('selected-tent')?.setData(polygonLayer(visibleTents.filter(t=>t.id===current.selected)));
+      m.getSource('tent-dimensions')?.setData(tentDimensionLabels(visibleTents));
       m.getSource('measure')?.setData(measurementPath(current.points,current.measureClosed));
       const last=current.points[current.points.length-1];
       const hover=current.measureCursor;
@@ -230,18 +242,26 @@ function App(){
         return;
       }
       if(st.tool==='place'){
-        const t={id:crypto.randomUUID(),lng:e.lngLat.lng,lat:e.lngLat.lat,width:clamp(st.width,1,2000,20),length:clamp(st.length,1,2000,40),rotation:clamp(st.rotation,0,359,0),clearance:clamp(st.clearance,0,200,4)};
-        setPendingTent(t);return;
+        const t={id:crypto.randomUUID(),lng:e.lngLat.lng,lat:e.lngLat.lat,width:clamp(st.width,1,2000,20),length:clamp(st.length,1,2000,40),rotation:clamp(st.rotation,0,359,0),clearance:clamp(st.clearance,0,200,4),name:''};
+        setProject(p=>({...p,tents:[...(p.tents||[]),t]}));
+        setPendingTent(null);setSelected(t.id);setTool('select');
+        setStatus('Tent placed. Select its layer to edit the size, angle, and clearance.');
+        return;
       }
       const hit=m.queryRenderedFeatures(e.point,{layers:['tent-fill']})[0];
       setSelected(hit?.properties?.id||null);
     });
-    m.on('mouseenter','tent-fill',()=>{if(live.current.tool==='select')m.getCanvas().style.cursor='move';});
+    m.on('mouseenter','tent-fill',e=>{
+      if(live.current.tool!=='select')return;
+      const id=e.features?.[0]?.properties?.id;
+      const t=live.current.tents.find(x=>x.id===id);
+      m.getCanvas().style.cursor=t?.locked?'pointer':'move';
+    });
     m.on('mouseleave','tent-fill',()=>{m.getCanvas().style.cursor=live.current.tool==='select'?'default':'crosshair';});
     m.on('mousedown','tent-fill',e=>{
       if(live.current.tool!=='select')return;
       const id=e.features?.[0]?.properties?.id,t=live.current.tents.find(t=>t.id===id);
-      if(!t)return;
+      if(!t||t.locked)return;
       drag.current={id,start:e.lngLat.toArray(),lng:t.lng,lat:t.lat};
       setSelected(id);m.dragPan.disable();
     });
@@ -382,7 +402,7 @@ function App(){
   }
   return <div className="layout">
     <aside className="sidebar">
-      <div className="brand"><span className="mark">U</span><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.3</small></div></div>
+      <div className="brand"><img className="crew-brand-logo" src="https://raw.githubusercontent.com/m1chael67/universal-crew-app/main/logo_resized.png" alt="Universal Rentals & Events logo"/><div><strong>Universal Design Studio</strong><small>SATELLITE SITE PLANNER · V0.4</small></div></div>
       <div className="quick-actions"><button className="primary" onClick={beginAddTent} disabled={!token}>+ Add tent</button></div>
       <section><h3>Map imagery</h3><div className="style-choices"><button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}>Satellite</button><button type="button" className={mapStyle==='hybrid'?'active':''} onClick={()=>setMapStyle('hybrid')}>Hybrid</button><button type="button" className={mapStyle==='streets'?'active':''} onClick={()=>setMapStyle('streets')}>Streets</button></div>{!token?<><label>Mapbox public token<input value={tokenText} onChange={e=>setTokenText(e.target.value)} type="password" placeholder="pk.eyJ…"/></label><button className="primary" onClick={startMap}>Open satellite map</button></>:<form onSubmit={search}><label>Find an address<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Enter a property address"/></label><button type="submit">Search address</button>{matches.map((r,i)=><button type="button" key={i} className="search-result" onClick={()=>{mapRef.current?.flyTo({center:r.coords,zoom:18});setAddress(r.name);setMatches([]);}}>{r.name}</button>)}</form>}<p className="status">{status}</p>{imageryAccess==='blocked'&&<div className="imagery-warning" role="alert"><strong>Satellite imagery is blocked by Mapbox.</strong><p>The street map can load while the raster imagery is unavailable. If your Mapbox account is still on Demo, add a payment method to switch to Standard and unlock raster tiles. Standard has no upfront fee but usage can become billable.</p><a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">Open Mapbox account settings</a></div>}</section>
       <section><h3>Tools</h3>
@@ -402,7 +422,7 @@ function App(){
           <p className="hint">Side labels show feet to two decimals. Repeated side lengths within 0.03 ft are labeled only once.</p>
         </div>}
       </section>
-      <section ref={addSectionRef} className="add-tent-section"><h3>Add a tent</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Preview tent on map</button>{tool==='place'&&<div className="placement-controls"><strong>{pendingTent?'Tent preview ready':'Click the map to preview the tent'}</strong><p>You can click elsewhere to move the preview. Nothing gets added until you confirm.</p><button className="primary" disabled={!pendingTent} onClick={confirmTent}>Confirm add tent</button><button onClick={cancelTent}>Cancel</button></div>}</section>
+      <section ref={addSectionRef} className="add-tent-section"><h3>New tent settings</h3><div className="grid"><label>Width (ft)<input type="number" min="1" value={width} onChange={e=>setWidth(e.target.value)}/></label><label>Length (ft)<input type="number" min="1" value={length} onChange={e=>setLength(e.target.value)}/></label><label>Rotation (°)<input type="number" value={rotation} onChange={e=>setRotation(e.target.value)}/></label><label>Clearance (ft)<input type="number" min="0" value={clearance} onChange={e=>setClearance(e.target.value)}/></label></div><button className="primary" disabled={!token} onClick={beginAddTent}>Place a new tent</button>{tool==='place'&&<div className="placement-controls"><strong>Placement mode is active</strong><p>Click once on the map to add your tent. You'll immediately be able to edit its layer.</p><button onClick={cancelTent}>Cancel placement</button></div>}</section>
       <section><h3>Placed tents ({tents.length})</h3>{tents.map((t,i)=><div key={t.id} className="tent-list-row"><button className={'listitem '+(selected===t.id?'active':'')} onClick={()=>{setTool('select');setPendingTent(null);setSelected(t.id);mapRef.current?.flyTo({center:[t.lng,t.lat],zoom:Math.max(mapRef.current.getZoom(),17)});}}>{'Tent '+(i+1)+' — '+t.width+' × '+t.length+' ft'}</button><button className="tent-remove" aria-label={'Delete tent '+(i+1)} title="Delete tent" onClick={()=>deleteTent(t)}>×</button></div>)}{chosen&&<div className="chosen"><h4>Edit selected tent</h4>
             <div className="grid">
               <label>Width (ft)<input type="number" min="1" max="2000" value={widthDraft} onChange={e=>changeSelectedDimension('width',e.target.value)} onBlur={()=>finishSelectedDimension('width',widthDraft)}/></label>
@@ -418,7 +438,7 @@ function App(){
           </div>}</section>
       <section><h3>Project</h3><label>Project name<input value={project.name||''} onChange={e=>setProject(p=>({...p,name:e.target.value}))}/></label><button onClick={exportFile}>Save editable project (.json)</button><label className="filebutton">Open editable project (.json)<input type="file" accept=".json" onChange={importFile}/></label><div className="grid image-exports"><button disabled={!token} onClick={()=>exportImage('png')}>Export PNG</button><button disabled={!token} onClick={()=>exportImage('jpg')}>Export JPG</button></div><p className="hint">JSON saves editable tent geometry for reopening. PNG/JPG are flat pictures of the map. Projects are saved in this browser; Appwrite cloud saving comes later.</p></section>
     </aside>
-    <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">{pendingTent?'Preview only — click Confirm add tent in the sidebar':'Tent placement: click a location to preview'}</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
+    <main className="map-panel"><div className="map-top"><strong>{project.name||'New site plan'}</strong><span>{tents.length} tents · {tents.reduce((sum,t)=>sum+t.width*t.length,0).toLocaleString()} sq ft</span></div><div className="map" ref={mapDiv}/>{tool==='place'&&token&&<div className="map-mode-banner">'Click on the map to place your tent. Press Cancel placement to exit.'</div>}{!token&&<div className="empty-map"><h2>Plan events directly on satellite imagery.</h2><p>Enter your Mapbox public token on the left to start measuring sites and placing accurately scaled tents.</p></div>}<div className="disclaimer">Concept planning only. Check property dimensions, terrain, utilities, access, and anchoring on-site. Map imagery © Mapbox and contributors.</div></main>
   </div>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
