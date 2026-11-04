@@ -31,8 +31,9 @@ export function addTentDimensions(root,{length,width,eave,ridge}){
   guide(root,[a-1.8,0,d],[a-1.8,eave,d],asFeet(eave)+' ft legs',[-2,0,0]);
   guide(root,[a-1.8,0,0],[a-1.8,ridge,0],asFeet(ridge)+' ft ridge',[-2,0,0]);
 }
-export function addStageDimension(stageGroup,deckHeight){
-  const feet=Math.floor(deckHeight),inches=Math.round((deckHeight-feet)*12);
-  const text=feet?feet+' ft '+(inches?inches+' in':''):inches+' in';
-  guide(stageGroup,[0,0,0],[0,deckHeight,0],text+' stage',[0,deckHeight*.18,0]);
+export function addStageDimension(stageGroup,deckHeight,width=4,depth=4){
+  const inches=Math.round(deckHeight*12);
+  const x=width/2+.45,z=depth/2+.45;
+  // Outside the deck: labels otherwise disappear behind the solid panels.
+  guide(stageGroup,[x,0,z],[x,deckHeight,z],inches+'″ deck height',[1.3,0,.4]);
 }
