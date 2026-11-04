@@ -24,10 +24,10 @@ In **Project Settings → API Keys**, create a key with the minimum scopes requi
 
 ### 3. Deploy the Appwrite Function
 
-Create a Node.js Appwrite Function named **Design Studio Admin**. Configure:
+Use your existing Node.js Function **Design Studio Admin** (ID `6aeb52cf002f8a6dd6a9`). **Do not create a second Function.** Configure:
 - GitHub repository: `m1chael67/Universal-Design-Studio`
 - Branch: `main`
-- Root directory: `functions/design-admin`
+- Root directory: `functions/design-admin` (**important**: this prevents Appwrite from running its example starter file instead of the actual admin handler)
 - Install command: `npm install`
 - Entrypoint: `src/main.js`
 - Function execute access: **All users** (authenticated). A server-side check independently verifies the real caller's signed Appwrite JWT, exact account ID, and account email before returning anything.
@@ -37,12 +37,12 @@ In **Function → Settings → Environment variables**, create:
 - `DESIGN_ADMIN_USER_ID`: exact Appwrite Auth user ID from step 1.
 - `DESIGN_ADMIN_API_KEY`: API key created in step 2, marked **Secret**.
 
-Deploy the Function, then copy its **Function ID**.
+Save the function settings, then **Deploy or Redeploy this Function** and make the successful deployment active. The starter template response contains `motto`, `learn`, and `getInspired`; if the admin panel reports these fields, the Function is still running starter code. Verify the active deployment root directory and entrypoint.
 
 ### 4. Connect the frontend
 
-In the **Universal Design Studio Site → Settings → Environment variables**, create:
-- `VITE_DESIGN_ADMIN_FUNCTION_ID`: the function ID (this ID is public and not sensitive).
+In the **Universal Design Studio Site → Settings → Environment variables**, create (optional if using the built-in default):
+- `VITE_DESIGN_ADMIN_FUNCTION_ID`: `6aeb52cf002f8a6dd6a9` (this identifier is public and not sensitive).
 
 Redeploy the Site. Log in as the specified admin account, then expand **Design Studio Admin — Accounts & Projects** in the Cloud Projects section. Click **Refresh accounts & projects**.
 
