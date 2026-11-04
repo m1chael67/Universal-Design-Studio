@@ -84,10 +84,15 @@ export default function AdminProjectViewer({record,owner,onClose}){
           layout:{'text-field':['get','label'],'text-size':11,'text-offset':[0,-1]},
           paint:{'text-color':'#fffdf1','text-halo-color':'#142b30','text-halo-width':2}});
         updateLayers();
-        if(tents.length){
+        if(tents.length||marks.length){
           const bounds=new mapboxgl.LngLatBounds();
-          tents.forEach(t=>footprint(t).forEach(pos=>bounds.extend(pos)));
-          m.fitBounds(bounds,{padding:80,maxZoom:20,duration:0});
+          tents.filter(t=>!t.hidden).forEach(t=>footprint(t).forEach(pos=>bounds.extend(pos)));
+          marks.filter(x=>!x.hidden).forEach(item=>
+            (item.points||[]).forEach(p=>{
+              if(Array.isArray(p)&&p.length===2&&p.every(Number.isFinite))bounds.extend(p);
+            })
+          );
+          if(!bounds.isEmpty())m.fitBounds(bounds,{padding:80,maxZoom:20,duration:0});
         }
       });
     }catch(err){setStatus('Unable to start map: '+err.message);}
