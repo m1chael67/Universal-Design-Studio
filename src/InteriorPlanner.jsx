@@ -226,7 +226,9 @@ export default function InteriorPlanner({tent,onChange,onClose}){
     const svg=svgRef.current;if(!svg)return '';
     const clone=svg.cloneNode(true);
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg');clone.removeAttribute('style');
-    clone.setAttribute('width',String(Math.round(svgWidth)));clone.setAttribute('height',String(Math.round(svgHeight)));
+    const exportScale=Math.min(50,2400/(w+pad*2),2400/(h+pad*2));
+    clone.setAttribute('width',String(Math.max(1,Math.round((w+pad*2)*exportScale))));
+    clone.setAttribute('height',String(Math.max(1,Math.round((h+pad*2)*exportScale))));
     return new XMLSerializer().serializeToString(clone);
   }
   function downloadBlob(blob,extension){
