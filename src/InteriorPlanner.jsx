@@ -267,7 +267,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
     selectEntity(obj.id);setPanels(p=>({...p,catalog:false}));
   }
   function addDoor(){
-    const wall='top',d={id:uid(),wall,at:w/2,width:Math.min(4,Math.max(1,w/2))};
+    const wall='top',d={id:uid(),wall,at:w/2,width:Math.min(5,Math.max(1,w))};
     commit({doors:[...layout.doors,d],sidewalls:{...layout.sidewalls,top:true}});
     selectEntity('door:'+d.id);setPanels(p=>({...p,access:false}));
   }
