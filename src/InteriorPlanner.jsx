@@ -145,7 +145,8 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
   const [optimizeMode,setOptimizeMode]=useState('replace');
   const [optimizeTable,setOptimizeTable]=useState('auto');
   const [optimizeChair,setOptimizeChair]=useState('folding');
-  const [seatCounts,setSeatCounts]=useState({round5:8,round6:10,rect6:6,rect8:8});
+  const [seatCounts,setSeatCounts]=useState({round5:10,round6:10,rect6:8,rect8:10});
+  const [addTableWithChairs,setAddTableWithChairs]=useState(true);
   const [spacingOffset,setSpacingOffset]=useState(0);
   const [wallBuffer,setWallBuffer]=useState(0);
   const [maxTables,setMaxTables]=useState(80);
@@ -271,7 +272,8 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
     const obj={id:uid(),catalog:cat.key,type:cat.type,label:cat.title,x:cap(w/2+(n%4)*.75,0,w),
       y:cap(h/2+(n%3)*.75,0,h),w:cat.w,h:cat.h,rot:0,
       ...(cat.type==='stage'?{heightInches:16}:{} )};
-    commit({objects:[...layout.objects,obj]});
+    const chairs=addTableWithChairs?chairsForTable(obj):[];
+    commit({objects:[...layout.objects,obj,...chairs]});
     selectEntity(obj.id);setPanels(p=>({...p,catalog:false}));
   }
   function addDoor(){
@@ -314,37 +316,47 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
     if(o.type==='round')return o.w>=5.75?seatCounts.round6:seatCounts.round5;
     return o.w>=7?seatCounts.rect8:seatCounts.rect6;
   }
-  function addChairsAround(){
-    if(!chosen)return;
-    const count=seatingCount(chosen);if(!count)return;
-    const angle=(chosen.rot||0)*Math.PI/180;
-    const rotate=(x,y)=>({x:chosen.x+x*Math.cos(angle)-y*Math.sin(angle),y:chosen.y+x*Math.sin(angle)+y*Math.cos(angle)});
-    const chairCat=CATALOG.find(c=>c.key==='folding');
+  function chairsForTable(table){
+    const count=seatingCount(table);
+    if(!count)return [];
+    const angle=(table.rot||0)*Math.PI/180;
+    const rotate=(x,y)=>({x:table.x+x*Math.cos(angle)-y*Math.sin(angle),
+      y:table.y+x*Math.sin(angle)+y*Math.cos(angle)});
+    const chairCat=CATALOG.find(c=>c.key===optimizeChair)||CATALOG.find(c=>c.key==='folding');
     const chairs=[];
     const insert=(x,y,rot)=>{
       const pos=rotate(x,y);
       chairs.push({id:uid(),catalog:chairCat.key,type:'chair',label:chairCat.title,
-        x:Number(pos.x.toFixed(3)),y:Number(pos.y.toFixed(3)),w:chairCat.w,h:chairCat.h,rot:(rot+360)%360});
+        tableId:table.id,x:Number(pos.x.toFixed(3)),y:Number(pos.y.toFixed(3)),
+        w:chairCat.w,h:chairCat.h,rot:(rot+360)%360});
     };
-    if(chosen.type==='round'){
-      const radius=Math.max(chosen.w,chosen.h)/2+1.1;
+    if(table.type==='round'){
+      const radius=Math.max(table.w,table.h)/2+1.1;
       for(let i=0;i<count;i++){
         const theta=-Math.PI/2+2*Math.PI*i/count;
-        insert(radius*Math.cos(theta),radius*Math.sin(theta),(chosen.rot||0)+theta*180/Math.PI+90);
+        insert(radius*Math.cos(theta),radius*Math.sin(theta),(table.rot||0)+theta*180/Math.PI+90);
       }
     }else{
-      const normal=chosen.w>=7?8:6,extras=count>normal?2:0,each=(count-extras)/2;
-      for(let i=0;i<each;i++){
-        const x=-chosen.w/2+(i+1)*chosen.w/(each+1),offset=chosen.h/2+1.05;
-        insert(x,-offset,chosen.rot||0);
-        insert(x,offset,(chosen.rot||0)+180);
-      }
+      const sideMax=table.w>=7?8:6;
+      const extras=count>sideMax?2:0;
+      const sideCount=count-extras;
+      const upper=Math.ceil(sideCount/2),lower=Math.floor(sideCount/2);
+      const offset=table.h/2+1.05;
+      for(let i=0;i<upper;i++)insert(-table.w/2+(i+1)*table.w/(upper+1),-offset,table.rot||0);
+      for(let i=0;i<lower;i++)insert(-table.w/2+(i+1)*table.w/(lower+1),offset,(table.rot||0)+180);
       if(extras){
-        insert(-chosen.w/2-1.1,0,(chosen.rot||0)+270);
-        insert(chosen.w/2+1.1,0,(chosen.rot||0)+90);
+        insert(-table.w/2-1.1,0,(table.rot||0)+270);
+        insert(table.w/2+1.1,0,(table.rot||0)+90);
       }
     }
-    commit({objects:[...layout.objects,...chairs]});
+    return chairs;
+  }
+  function addChairsAround(){
+    if(!chosen)return;
+    const existing=layout.objects.filter(o=>o.type==='chair'&&o.tableId===chosen.id);
+    const chairs=chairsForTable(chosen);
+    if(existing.length&&!window.confirm('Replace '+existing.length+' linked chairs around this table?'))return;
+    commit({objects:[...layout.objects.filter(o=>!existing.some(c=>c.id===o.id)),...chairs]});
   }
   function toPoint(e){
     const svg=svgRef.current;if(!svg)return null;
@@ -551,7 +563,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
                 onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'h',val):updateObject(chosen.id,{h:val})}/>
               <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
             </div>
-            {chosen.type==='stage'&&<><XYField key={chosen.id+'height'} label="Stage height (inches)" value={Number(chosen.heightInches)||16} min={4} max={72} step={1} onCommit={heightInches=>updateObject(chosen.id,{heightInches})}/><p className="ip-help">Bil-Jax: stage width and depth are made from 4 × 4 ft modules. Default deck height is 16″; gray seams mark each section.</p></>}
+            {chosen.type==='stage'&&<><XYField key={chosen.id+'height'} label="Stage height (inches)" value={Number(chosen.heightInches)||16} min={4} max={72} step={1} onCommit={heightInches=>updateObject(chosen.id,{heightInches})}/><p className="ip-help">Bil-Jax stage uses 4 × 4 ft sections. Default top-of-deck height is 16″.</p></>}
             {chosen.type==='stairs'&&<><p className="ip-help">The yellow TOP / STAGE line is the high end of the stairs. Rotate and position it along the outside edge of a stage to connect them automatically.</p>{stageLink?<p className="ip-help" role="status" style={{color:'#63edaa',fontWeight:700}}>✓ Linked to stage · stairs automatically match its {stageLink.stageHeightInches}″ deck height, including future stage-height changes.</p>:<p className="ip-help">Not connected to a stage yet · stairs use {Number(chosen.heightInches)||16}″ height until attached.</p>}</>}
             {chosen.type==='dance'&&<label className="ip-check ip-custom-dance">
               <input type="checkbox" checked={Boolean(chosen.customSize)} onChange={e=>updateObject(chosen.id,{
@@ -659,7 +671,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
           <p className="ip-help">Roomy, balanced and maximum use different estimated gaps. Door buffer zones and existing objects are accounted for conservatively, but human circulation, accessibility, tent poles, anchoring, and exit requirements still need review.</p>
         </>}
         </section>
-        <FoldSection title="Add equipment" open={panels.catalog} onToggle={()=>setPanels(p=>({...p,catalog:!p.catalog}))}><div className="ip-catalog">
+        <FoldSection title="Add equipment" open={panels.catalog} onToggle={()=>setPanels(p=>({...p,catalog:!p.catalog}))}><label className="ip-check" style={{marginBottom:10}}><input type="checkbox" checked={addTableWithChairs} onChange={e=>setAddTableWithChairs(e.target.checked)}/> Add chairs automatically when placing a dining table</label><label className="ip-field">Chair style<select value={optimizeChair} onChange={e=>setOptimizeChair(e.target.value)}><option value="folding">Folding</option><option value="chiavari">Chiavari</option></select></label><p className="ip-help">6 ft: up to 8 seats (including ends). 8 ft: up to 10. 60″ round: up to 10. Select any table later to add or replace its chairs.</p><div className="ip-catalog">
           {CATALOG.map(cat=><button key={cat.key} onClick={()=>addObject(cat)} title={cat.title}><span className={'ip-swatch ip-'+cat.type}/><span>{cat.title}</span></button>)}
         </div></FoldSection>
         <FoldSection title="Doors & sidewalls" open={panels.access} onToggle={()=>setPanels(p=>({...p,access:!p.access}))} count={layout.doors.length}>
