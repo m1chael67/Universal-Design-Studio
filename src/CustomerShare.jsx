@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import {Client,TablesDB} from 'appwrite';
 import ThreeDViewer from './ThreeDViewer.jsx';
 import {interiorGeoJSON} from './mapInterior.js';
+import {restoreSharedTent} from './shareSnapshot.js';
 import './share.css';
 const client=new Client().setEndpoint('https://nyc.cloud.appwrite.io/v1').setProject('6aea8c410001e8aed9b1');
 const db=new TablesDB(client);
@@ -28,7 +29,7 @@ export default function CustomerShare({id}){
       if(!row.name?.startsWith('[PUBLIC VIEW] '))throw new Error('This is not a public customer view.');
       const data=JSON.parse(row.payload);
       if(!Array.isArray(data.tents))throw new Error('Invalid customer view.');
-      setProject(data);
+      setProject({...data,tents:data.tents.map(restoreSharedTent)});
     }).catch(()=>{if(!cancelled)setError('This customer link is unavailable or has been revoked.');});
     return ()=>{cancelled=true;};
   },[id]);

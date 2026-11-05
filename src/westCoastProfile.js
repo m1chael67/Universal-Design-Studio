@@ -85,3 +85,20 @@ export function constrainedWalkPosition(position,target,length,width,eave=7){
     target:{x:clamp(target.x,xMin,xMax),y:height,z:clamp(target.z,zMin,zMax)}
   };
 }
+
+/**
+ * For a long 40-wide, each six-way end crown has five roof rafter branches.
+ * The sixth socket is used by the adjoining ridge spreader (rendered separately).
+ * Four matching 40x40 hip feet need a different conceptual fitting.
+ */
+export function fortyWideCrownRafters(profile,end){
+  if(profile.familyWidth!==40||profile.right-profile.left<.01)return [];
+  const left=end==='left',x=left?profile.left:profile.right;
+  const endX=left?-profile.length/2:profile.length/2;
+  return [
+    [x,profile.eave,-profile.width/2],
+    [x,profile.eave,profile.width/2],
+    [endX,profile.eave,0],
+    ...profile.hipJoints.filter(j=>left?j.x<0:j.x>0).map(j=>[j.x,j.y,j.z])
+  ];
+}

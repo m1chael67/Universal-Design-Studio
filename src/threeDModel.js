@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {westCoastProfile} from './westCoastProfile.js';
+import {westCoastProfile,fortyWideCrownRafters} from './westCoastProfile.js';
 import {resolveStairHeights} from './stageMatching.js';
 import {addTentDimensions,addStageDimension} from './threeDDimensions.js';
 import {stage3DGeometry,stair3DGeometry} from './stage3DGeometry.js';
@@ -145,12 +145,19 @@ function addWestCoastStructure(root,{length,width,eave,roofMode,frameVisible}){
   for(let i=0;i<p.ridgeXs.length-1;i++)
     post(root,[p.ridgeXs[i],p.ridge,0],[p.ridgeXs[i+1],p.ridge,0],.084);
   for(const x of p.ridgeXs)frameFitting(root,x,p.ridge,0,x===p.left||x===p.right);
-  // Main transverse rafters and the head/end-wall rafters (both are necessary
-  // to reproduce the Celina 20x40 count of eight roof rafters).
+  // A 40-wide six-way crown has exactly five roof branches plus one ridge tube.
+  const sixWay40=p.familyWidth===40&&p.right-p.left>.01;
   for(const x of p.ridgeXs){
+    if(sixWay40&&(x===p.left||x===p.right))continue;
     for(const z of [-d,d])frameRafter(root,[x,p.ridge,0],[x,eave,z],p.doubleTube);
   }
-  if(p.endLegZs.includes(0)||p.familyWidth===40){
+  if(sixWay40){
+    for(const end of ['left','right']){
+      const crownX=end==='left'?p.left:p.right;
+      for(const target of fortyWideCrownRafters(p,end))
+        frameRafter(root,[crownX,p.ridge,0],target,false);
+    }
+  }else if(p.endLegZs.includes(0)||p.familyWidth===40){
     for(const [x,crownX] of [[a,p.left],[b,p.right]]){
       frameRafter(root,[crownX,p.ridge,0],[x,eave,0],p.doubleTube);
     }
@@ -178,15 +185,11 @@ function addWestCoastStructure(root,{length,width,eave,roofMode,frameVisible}){
       const endX=leftEnd?a:b;
       const crownX=leftEnd?p.left:p.right;
       const sign=Math.sign(joint.z),j=[joint.x,joint.y,joint.z];
-      frameRafter(root,[crownX,p.ridge,0],j,false);
+      if(!sixWay40)frameRafter(root,[crownX,p.ridge,0],j,false);
       frameRafter(root,j,[endX,eave,sign*d],false);
       frameRafter(root,j,[endX,eave,sign*10],false);
       frameRafter(root,j,[joint.x,eave,sign*d],false);
       frameFitting(root,...j,true);
-      // Additional full-length roof pole to the intermediate end-wall tee.
-      // This makes the single-tube 40-wide frame visually distinct from
-      // the simpler 20-wide layout; verify actual fitting positions on site.
-      frameRafter(root,[crownX,p.ridge,0],[endX,eave,sign*10],false);
     }
   }else{
     // Classic single hip rafter directly between each crown and corner.
