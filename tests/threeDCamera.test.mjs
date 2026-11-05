@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {exteriorPose,walkStart,walkEye,walkTarget,dragLook} from '../src/threeDCamera.js';
+import {exteriorPose,walkStart,walkEye,walkTarget,dragLook,WALK_FOV,PERSPECTIVE_FOV} from '../src/threeDCamera.js';
 
 test('perspective opens centered on the tent and respects mobile aspect ratio',()=>{
   const desktop=exteriorPose(80,40,7,1.6);
@@ -29,4 +29,12 @@ test('drag look is gentle and limits pitch but does not clamp yaw',()=>{
   assert.ok(Math.abs(one.pitch)<.4);
   assert.equal(dragLook(one,0,-10000).pitch,1.4);
   assert.equal(dragLook(one,0,10000).pitch,-1.4);
+});
+
+test('walk-through uses a narrower, stable head-height perspective',()=>{
+  assert.equal(WALK_FOV,60);
+  assert.equal(PERSPECTIVE_FOV,48);
+  const eye=walkEye({x:0,y:0,z:0},80,40,7);
+  assert.ok(walkTarget(eye,0,.4).y>eye.y);
+  assert.ok(Math.abs(dragLook({yaw:0,pitch:0},100,0).yaw)<.25);
 });
