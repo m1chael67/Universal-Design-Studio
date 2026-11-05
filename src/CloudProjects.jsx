@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
+import {makeSharedTent} from './shareSnapshot.js';
 import {Account,Client,ID,Permission,Query,Role,TablesDB} from 'appwrite';
 import './cloud.css';
 import AdminPanel from './AdminPanel.jsx';
@@ -230,19 +231,7 @@ export default function CloudProjects({project,measurement,onLoadProject}){
       // The public snapshot excludes notes, customer/contact fields and photos.
       const current=latestPayload.current;
       const snapshot={name:safeName(current.name),center:current.center,zoom:current.zoom,
-        tents:(current.tents||[]).filter(t=>!t.hidden).map(t=>({
-          id:t.id,name:t.name,width:t.width,length:t.length,rotation:t.rotation,
-          lat:t.lat,lng:t.lng,siteFlipLength:t.siteFlipLength,siteFlipWidth:t.siteFlipWidth,
-          showInteriorOnMap:true,
-          interior:t.interior?{
-            objects:(t.interior.objects||[]).map(o=>({
-              id:o.id,catalog:o.catalog,type:o.type,label:o.label,
-              x:o.x,y:o.y,w:o.w,h:o.h,rot:o.rot,
-              heightInches:o.heightInches,tableId:o.tableId
-            })),
-            doors:(t.interior.doors||[]).map(d=>({wall:d.wall,at:d.at}))
-          }:null
-        }))};
+        tents:(current.tents||[]).filter(t=>!t.hidden).map(makeSharedTent)};
       if(!snapshot.tents.length)throw new Error('Add at least one visible tent before sharing.');
       const row=await tables.createRow({databaseId:DATABASE_ID,tableId:TABLE_ID,
         rowId:ID.unique(),data:{name:SHARE_PREFIX+safeName(current.name).slice(0,235),
