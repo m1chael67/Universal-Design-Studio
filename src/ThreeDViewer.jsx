@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {buildTentScene,buildSiteScene} from './threeDModel.js';
 import {tentDimensions,siteRadius} from './tent3DMath.js';
-import {exteriorPose,walkStart,walkEye,walkTarget,dragLook} from './threeDCamera.js';
+import {exteriorPose,walkStart,walkEye,walkTarget,dragLook,WALK_FOV,PERSPECTIVE_FOV} from './threeDCamera.js';
 import './threeD.css';
 
 const presets=['Perspective','Walk-through'];
@@ -32,13 +32,13 @@ export default function ThreeDViewer({tents,onClose}){
     walkRef.current=next==='Walk-through';
     if(next==='Walk-through'){
       walkLook.current={yaw:0,pitch:0};
-      controls.enabled=false;camera.fov=75;camera.updateProjectionMatrix();
+      controls.enabled=false;camera.fov=WALK_FOV;camera.updateProjectionMatrix();
       const p=walkStart(length,width,eave);
       camera.position.set(p.x,p.y,p.z);
       const t=walkTarget(p,0,0);controls.target.set(t.x,t.y,t.z);
       camera.lookAt(controls.target);
     }else{
-      controls.enabled=true;camera.fov=48;camera.updateProjectionMatrix();
+      controls.enabled=true;camera.fov=PERSPECTIVE_FOV;camera.updateProjectionMatrix();
       const p=exteriorPose(length,width,eave,camera.aspect,siteMode?radius:0);
       camera.position.set(p.position.x,p.position.y,p.position.z);
       controls.target.set(p.target.x,p.target.y,p.target.z);
@@ -88,6 +88,22 @@ export default function ThreeDViewer({tents,onClose}){
         controls.target.set(t.x,t.y,t.z);camera.lookAt(controls.target);
       }
     };
+    // Mac trackpad precision-scroll pans the scene; pinch and mouse wheel still zoom.
+    const onWheel=e=>{
+      if(!camera||!controls||walkRef.current||e.ctrlKey||e.metaKey||e.altKey)return;
+      const precise=e.deltaMode===0&&(Math.abs(e.deltaX)>.1||
+        (Math.abs(e.deltaY)>.01&&Math.abs(e.deltaY)<85));
+      if(!precise)return;
+      e.preventDefault();e.stopImmediatePropagation();
+      camera.updateMatrixWorld();
+      const distance=camera.position.distanceTo(controls.target);
+      const scale=2*distance*Math.tan(camera.fov*Math.PI/360)/
+        Math.max(200,renderer.domElement.clientHeight);
+      const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0).setY(0).normalize();
+      const forward=controls.target.clone().sub(camera.position).setY(0).normalize();
+      const delta=right.multiplyScalar(e.deltaX*scale).add(forward.multiplyScalar(e.deltaY*scale));
+      camera.position.add(delta);controls.target.add(delta);controls.update();
+    };
     const onUp=e=>{
       if(gesture?.id===e.pointerId){
         if(renderer?.domElement?.hasPointerCapture?.(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
@@ -109,7 +125,7 @@ export default function ThreeDViewer({tents,onClose}){
       const {length,width}=tentDimensions(tent);
       const radius=siteMode?siteRadius(choices):Math.max(length,width,20);
       scene=new THREE.Scene();scene.background=new THREE.Color(0x1c303a);
-      camera=new THREE.PerspectiveCamera(view==='Walk-through'?75:48,1,.08,Math.max(1500,radius*10));
+      camera=new THREE.PerspectiveCamera(view==='Walk-through'?WALK_FOV:PERSPECTIVE_FOV,1,.08,Math.max(1500,radius*10));
       renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:false});
       renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
       renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -118,9 +134,10 @@ export default function ThreeDViewer({tents,onClose}){
       controls=new OrbitControls(camera,renderer.domElement);
       controls.target.set(0,Math.min(legHeight*.55,5),0);
       controls.enableDamping=true;controls.dampingFactor=.075;
-      controls.rotateSpeed=.38;controls.zoomSpeed=.65;
+      controls.rotateSpeed=.28;controls.zoomSpeed=.65;
       controls.maxPolarAngle=Math.PI*.58;controls.minPolarAngle=.10;
-      controls.enablePan=false;controls.enabled=view!=='Walk-through';
+      controls.enablePan=true;controls.enableZoom=true;controls.screenSpacePanning=false;
+      controls.enabled=view!=='Walk-through';
       walkRef.current=view==='Walk-through';
       scene.add(new THREE.HemisphereLight(0xf1fbff,0x6e8181,2.2));
       const sun=new THREE.DirectionalLight(0xffffff,2.5);
@@ -170,6 +187,8 @@ export default function ThreeDViewer({tents,onClose}){
       renderer.domElement.addEventListener('pointerdown',onDown);
       renderer.domElement.addEventListener('pointermove',onMove);
       renderer.domElement.addEventListener('pointerup',onUp);
+      renderer.domElement.addEventListener('pointercancel',onUp);
+      renderer.domElement.addEventListener('wheel',onWheel,{capture:true,passive:false});
       const tick=()=>{
         animation=requestAnimationFrame(tick);
         if(walkRef.current&&!siteMode){
@@ -202,6 +221,8 @@ export default function ThreeDViewer({tents,onClose}){
       renderer?.domElement?.removeEventListener('pointerdown',onDown);
       renderer?.domElement?.removeEventListener('pointermove',onMove);
       renderer?.domElement?.removeEventListener('pointerup',onUp);
+      renderer?.domElement?.removeEventListener('pointercancel',onUp);
+      renderer?.domElement?.removeEventListener('wheel',onWheel,true);
       controls?.dispose();
       scene?.traverse(obj=>{
         obj.geometry?.dispose();
@@ -215,13 +236,20 @@ export default function ThreeDViewer({tents,onClose}){
     };
   },[tent,index,siteMode,roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing,showDimensions]);
   useEffect(()=>{
-    const onKey=e=>{if(e.key==='Escape')onClose();};
+    const onKey=e=>{
+      if(e.key==='Escape'){onClose();return;}
+      if(!walkRef.current||e.target?.closest?.('input,select,textarea,[contenteditable="true"]'))return;
+      const directions={w:'forward',W:'forward',ArrowUp:'forward',
+        s:'back',S:'back',ArrowDown:'back',a:'left',A:'left',ArrowLeft:'left',
+        d:'right',D:'right',ArrowRight:'right'};
+      if(directions[e.key]){e.preventDefault();moveWalk(directions[e.key]);}
+    };
     window.addEventListener('keydown',onKey);
     return ()=>window.removeEventListener('keydown',onKey);
   },[onClose]);
   return <div className="three-d-backdrop" role="dialog" aria-modal="true" aria-label="Interactive 3D tent preview">
     <div className="three-d-shell">
-      <header><div><strong>3D Tent Viewer</strong><small>Centered Perspective orbit · Walk-through: drag or swipe to look freely</small></div>
+      <header><div><strong>3D Tent Viewer</strong><small>Perspective: orbit or two-finger pan · Walk-through: eye-level free look</small></div>
         <button type="button" onClick={onClose}>Close ×</button>
       </header>
       <div className="three-d-tools">
@@ -259,7 +287,7 @@ export default function ThreeDViewer({tents,onClose}){
         <button type="button" onClick={()=>moveWalk('left')}>← Left</button>
         <button type="button" onClick={()=>moveWalk('right')}>Right →</button>
         <button type="button" onClick={()=>moveWalk('back')}>↓ Back 2 ft</button>
-        <small>Drag or swipe to look up, down and around. The camera stays inside the tent.</small>
+        <small>Drag or swipe to turn your head; W/A/S/D or arrow keys to walk. Eye height stays fixed.</small>
       </div>}
       <div className="three-d-viewport" ref={mount}>
         {!tent&&<p>No visible tents yet. Add a tent to the satellite plan first.</p>}
