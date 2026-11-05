@@ -3,6 +3,7 @@ import {westCoastProfile,fortyWideCrownRafters} from './westCoastProfile.js';
 import {resolveStairHeights} from './stageMatching.js';
 import {addTentDimensions,addStageDimension} from './threeDDimensions.js';
 import {stage3DGeometry,stair3DGeometry} from './stage3DGeometry.js';
+import {pipeDrapeBays,trash32Dimensions} from './eventEquipment.js';
 import {clamp,normalizedInterior,tentDimensions,getWallSegments,objectPosition,sitePlacements,siteRadius} from './tent3DMath.js';
 
 const STEEL=0x86969b;
@@ -274,10 +275,10 @@ function addFurniture(root,layout,length,width,showDimensions=false){
   const pickables=[];
   for(const o of resolveStairHeights(layout.objects)){
     const position=objectPosition(o,length,width);
-    const w=clamp(Number(o.w)||2,.35,50),d=clamp(Number(o.h)||2,.35,50);
+    const w=clamp(Number(o.w)||2,.35,o.type==='pipeDrape'?200:50),d=clamp(Number(o.h)||2,.35,50);
     const group=new THREE.Group();
     group.position.set(position.x,0,position.z);group.rotation.y=-position.rotation;
-    const title=String(o.label||o.catalog||o.type||'Furniture').slice(0,80);
+    const title=String(o.type==='chair'&&['chiavari','resin'].includes(o.catalog)?'Resin chair':(o.label||o.catalog||o.type||'Furniture')).slice(0,80);
     group.userData.item={title,type:o.type||'table',width:w,depth:d,
       heightInches:Number(o.heightInches)||undefined,attachedStageId:o.attachedStageId||null};
     root.add(group);
@@ -290,8 +291,9 @@ function addFurniture(root,layout,length,width,showDimensions=false){
       cube(group,Math.min(w,1.1),.09,Math.min(d,1.1),0,.05,0,STEEL);
     }else if(type==='chair'){
       // Chairs get a true seat, backrest and legs rather than an upright block.
-      cube(group,w*.86,.14,d*.83,0,1.42,0,blue);
-      cube(group,w*.84,1.15,.13,0,2.05,-d*.35,blue);
+      const chairColor=['resin','chiavari'].includes(o.catalog)?0xf0efea:blue;
+      cube(group,w*.86,.14,d*.83,0,1.42,0,chairColor);
+      cube(group,w*.84,1.15,.13,0,2.05,-d*.35,chairColor);
       legs(group,w*.86,d*.83,1.35);
     }else if(type==='dance'){
       const columns=Math.max(1,Math.min(20,Math.ceil(w/3))),rows=Math.max(1,Math.min(20,Math.ceil(d/3)));
@@ -342,6 +344,36 @@ function addFurniture(root,layout,length,width,showDimensions=false){
       cube(group,w-.1,.018,.08,0,stairs.topFeet+.013,
         stairs.topEdgeZ+.065,0xf6d45e);
       group.userData.item.heightInches=Math.round(stairs.topFeet*12);
+    }else if(type==='pipeDrape'){
+      const drape=pipeDrapeBays(w,o.heightFeet);
+      // Pipe-and-drape posts are shared at joints. Each crossbar is <=10 ft.
+      for(const x of drape.uprights){
+        post(group,[x,0,0],[x,drape.height,0],.045,STEEL);
+        cube(group,.48,.055,.48,x,.028,0,0x78878e);
+      }
+      for(const bay of drape.bays){
+        post(group,[bay.start,drape.height,0],[bay.end,drape.height,0],.042,STEEL);
+        cube(group,Math.max(.08,bay.span-.10),Math.max(.4,drape.height-.24),.065,
+          bay.center,(drape.height-.24)/2+.03,0,0x34364f,.93);
+        // Fine vertical curtain pleats communicate fabric, rather than a wall.
+        const folds=Math.max(2,Math.floor(bay.span/.75));
+        for(let n=1;n<folds;n++){
+          const fx=bay.start+bay.span*n/folds;
+          cube(group,.025,Math.max(.3,drape.height-.35),.083,fx,(drape.height-.35)/2+.03,0,0x53536d,.88);
+        }
+      }
+      group.userData.item.heightFeet=drape.height;
+      group.userData.item.sections=drape.count;
+    }else if(type==='trash'){
+      const {diameterFeet,heightFeet}=trash32Dimensions;
+      const radius=diameterFeet/2;
+      const body=new THREE.Mesh(new THREE.CylinderGeometry(radius*.91,radius*.79,heightFeet-.12,20),material(0x44494c));
+      body.position.y=(heightFeet-.12)/2;body.castShadow=true;group.add(body);
+      const lid=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius*.96,.13,20),material(0x25292c));
+      lid.position.y=heightFeet-.07;group.add(lid);
+      const rim=new THREE.Mesh(new THREE.TorusGeometry(radius*.94,.036,8,24),material(0x8b9295));
+      rim.rotation.x=Math.PI/2;rim.position.y=heightFeet-.1;group.add(rim);
+      group.userData.item.capacityGallons=32;
     }else if(type==='bar'){
       cube(group,w,.24,d,0,3.4,0,0x90a971);
       cube(group,w*.88,3.25,.15,0,1.63,-d*.32,0x728866);

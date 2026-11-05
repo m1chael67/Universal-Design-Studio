@@ -27,8 +27,9 @@ test('drag look is gentle and limits pitch but does not clamp yaw',()=>{
   const one=dragLook({yaw:0,pitch:0},100,100);
   assert.ok(Math.abs(one.yaw)<.4);
   assert.ok(Math.abs(one.pitch)<.4);
-  assert.equal(dragLook(one,0,-10000).pitch,1.4);
-  assert.equal(dragLook(one,0,10000).pitch,-1.4);
+  assert.ok(one.pitch>0,'dragging down looks up');
+  assert.equal(dragLook(one,0,10000).pitch,1.4);
+  assert.equal(dragLook(one,0,-10000).pitch,-1.4);
 });
 
 test('walk-through uses a narrower, stable head-height perspective',()=>{

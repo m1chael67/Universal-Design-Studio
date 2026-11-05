@@ -113,3 +113,6 @@
 @media(max-width:650px){.ip-history{order:4}.ip-history button{font-size:12px;padding:8px}}
 
 .ip-view-site{background:#205b58!important;border-color:#4eb8a8!important;font-weight:700!important}
+
+.ip-swatch.ip-pipeDrape{height:5px;margin-top:6px;margin-bottom:5px;background:#a184df;border-radius:2px;border-left:3px solid #eee0ff;border-right:3px solid #eee0ff}
+.ip-swatch.ip-trash{height:18px;width:18px;border-radius:50%;background:#8f9aa2}

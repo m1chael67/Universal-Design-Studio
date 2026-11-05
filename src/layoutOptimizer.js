@@ -43,7 +43,7 @@ function buildCluster(t,x,y,chairKey,tableRotation=0){
   function chair(dx,dy,rotation){
     const p=turn(dx,dy);
     objects.push({id:id(),catalog:chairKey,type:'chair',
-      label:chairKey==='chiavari'?'Chiavari chair':'Folding chair',
+      label:['resin','chiavari'].includes(chairKey)?'Resin chair':'Folding chair',
       x:Number(p.x.toFixed(3)),y:Number(p.y.toFixed(3)),w:1.45,h:1.45,
       rot:((rotation+tableRotation)%360+360)%360,generatedBy:'optimizer'});
   }
@@ -150,7 +150,7 @@ function chairOnlyLayout(level,layout,width,length,chairKey,mode,opts){
       if(obstacles.some(o=>overlaps(box,o,.35)))continue;
       if(accepted.some(o=>overlaps(box,o,.10)))continue;
       const object={id:id(),catalog:chairKey,type:'chair',
-        label:chairKey==='chiavari'?'Chiavari chair':'Folding chair',
+        label:['resin','chiavari'].includes(chairKey)?'Resin chair':'Folding chair',
         x,y,w:chairW,h:chairH,rot:chairRotation,generatedBy:'optimizer'};
       accepted.push(box);chairs.push(object);
       if(chairs.length>=max)break rowLoop;

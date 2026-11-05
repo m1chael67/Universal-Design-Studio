@@ -4,7 +4,7 @@
 const RAD=Math.PI/180;
 const R=3.280839895;
 const COLORS={round:'#72d5cb',table:'#72d5cb',chair:'#b9c8ec',stage:'#f8c078',
-  dance:'#e4b7e5',bar:'#afd990',stairs:'#e8ad86'};
+  dance:'#e4b7e5',bar:'#afd990',stairs:'#e8ad86',pipeDrape:'#ad91e9',trash:'#8f9aa2'};
 const featureCollection=features=>({type:'FeatureCollection',features});
 const safe=v=>Number.isFinite(Number(v))?Number(v):0;
 
@@ -41,7 +41,7 @@ export function interiorGeoJSON(tents){
       const shape=rotatedCorners(o).map(p=>mapLocalPoint(t,p[0],p[1]));
       const label=type==='chair'?'':type==='round'?((Math.round(safe(o.w)*12))+'″'):
         type==='stage'?'STAGE':type==='dance'?'DANCE':
-        type==='stairs'?'STAIRS':type==='bar'?'BAR':o.label||type.toUpperCase();
+        type==='stairs'?'STAIRS':type==='bar'?'BAR':type==='pipeDrape'?'PIPE & DRAPE':type==='trash'?'32 GAL':o.label||type.toUpperCase();
       const properties={id:o.id,tentId:t.id,type,label,fill:COLORS[type]||'#f1f0d1'};
       polys.push({type:'Feature',properties,geometry:{type:'Polygon',coordinates:[[...shape,shape[0]]]}});
       if(label)points.push({type:'Feature',properties,geometry:{type:'Point',coordinates:mapLocalPoint(t,safe(o.x),safe(o.y))}});

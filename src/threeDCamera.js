@@ -34,5 +34,5 @@ export function walkTarget(position,yaw,pitch){
 }
 export function dragLook(look,dx,dy){
   return {yaw:look.yaw-Number(dx)*.0022,
-    pitch:clamp(look.pitch-Number(dy)*.0022,-1.4,1.4)};
+    pitch:clamp(look.pitch+Number(dy)*.0022,-1.4,1.4)};
 }

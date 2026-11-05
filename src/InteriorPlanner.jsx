@@ -10,12 +10,14 @@ const CATALOG = [
   {key:'rect8',title:'8 ft banquet table',type:'table',w:8,h:2.5,color:'#68c5ba'},
   {key:'cocktail',title:'Cocktail table',type:'round',w:2.5,h:2.5,color:'#68c5ba'},
   {key:'folding',title:'Folding chair',type:'chair',w:1.45,h:1.45,color:'#9aaddc'},
-  {key:'chiavari',title:'Chiavari chair',type:'chair',w:1.45,h:1.45,color:'#9aaddc'},
+  {key:'resin',title:'Resin chair',type:'chair',w:1.45,h:1.45,color:'#f1f3ee'},
   {key:'stage',title:'Bil-Jax stage (4 ft sections)',type:'stage',w:4,h:4,color:'#e7b66c'},
+  {key:'stairs',title:'Stage stairs 4 × 3 ft',type:'stairs',w:4,h:3,color:'#b1a28a'},
   {key:'dance',title:'Dance floor (3 ft panels)',type:'dance',w:12,h:12,color:'#d7a6cb'},
   {key:'bar6',title:'Bar 6 ft',type:'bar',w:6,h:2.5,color:'#a4c782'},
   {key:'bar7',title:'Bar 7 ft',type:'bar',w:7,h:2.5,color:'#a4c782'},
-  {key:'stairs',title:'Stage stairs 4 × 3 ft',type:'stairs',w:4,h:3,color:'#b1a28a'},
+  {key:'pipeDrape',title:'Pipe & drape (10 ft bay)',type:'pipeDrape',w:10,h:0.4,color:'#9f80d6'},
+  {key:'trash32',title:'32 gal trash can',type:'trash',w:1.9,h:1.9,color:'#8f9aa2'},
   // No buffet table preset; regular tables can be repurposed manually.
 ];
 const WALLS=['top','right','bottom','left'];
@@ -61,7 +63,9 @@ function itemDescription(o){
   if(o.type==='table')return fmtSize(o.w)+' ft rectangular table';
   if(o.type==='stage')return 'Bil-Jax stage '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft · '+(Number(o.heightInches)||16)+'″ high';
   if(o.type==='dance')return 'Dance floor '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
-  if(o.type==='chair')return o.catalog==='chiavari'?'Chiavari chair':'Folding chair';
+  if(o.type==='chair')return ['resin','chiavari'].includes(o.catalog)?'Resin chair':'Folding chair';
+  if(o.type==='pipeDrape')return 'Pipe & drape '+fmtSize(o.w)+' ft run · '+fmtSize(o.heightFeet||8)+' ft tall ('+Math.ceil(Number(o.w)/10)+' sections)';
+  if(o.type==='trash')return '32 gal trash can';
   if(o.type==='stairs')return 'Stage stairs '+fmtSize(o.w)+' × '+fmtSize(o.h)+' ft';
   if(o.type==='bar')return 'Bar '+fmtSize(o.w)+' ft';
   return o.label||o.type;
@@ -81,10 +85,10 @@ function ItemShape({item,selected,press,outside,showHandle=true,stageLink=null})
   // Intentionally keep the floor-plan stage gold regardless of the saved
   // catalog/color from previous builds. Black panels are 3D-only.
   const clr=type==='stage'?'#e7b66c':(CATALOG.find(c=>c.key===item.catalog)?.color)||'#b2c0c9';
-  const rounded=type==='round';
+  const rounded=type==='round'||type==='trash';
   const outline=outside?'#ff796d':selected?'#ffda8b':'#e8f5f8';
   const number=n=>Number.isInteger(Number(n))?String(n):Number(n).toFixed(1);
-  const caption=type==='chair'?'':type==='round'?(item.catalog==='cocktail'?'Cocktail':(Math.round(w*12)+'″ round')):
+  const caption=type==='chair'?'':type==='trash'?'32 GAL':type==='pipeDrape'?'':type==='round'?(item.catalog==='cocktail'?'Cocktail':(Math.round(w*12)+'″ round')):
     type==='stage'?'STAGE':type==='dance'?'DANCE FLOOR':type==='stairs'?'STAIRS':type==='bar'?'BAR':number(w)+' ft TABLE';
   const fontSize=Math.max(.5,Math.min(1.05,w/5,h/2.6));
   return <g transform={`translate(${item.x},${item.y}) rotate(${item.rot||0})`}
@@ -92,11 +96,13 @@ function ItemShape({item,selected,press,outside,showHandle=true,stageLink=null})
     <title>{itemDescription(item)}</title>
     {rounded?<ellipse rx={w/2} ry={h/2} fill={clr} fillOpacity=".83" stroke={outline} strokeWidth={selected?0.2:0.08}/>:
       <rect x={-w/2} y={-h/2} width={w} height={h} rx={type==='chair'?0.24:0.12} fill={clr} fillOpacity=".85" stroke={outline} strokeWidth={selected?0.2:0.08}/>}
+    {type==='pipeDrape'&&<g pointerEvents="none"><path d={`M ${-w/2} 0 H ${w/2}`} stroke="#e5d8ff" strokeWidth=".19" strokeDasharray=".36,.12"/>{Array.from({length:Math.ceil(w/10)+1},(_,i)=>{const x=-w/2+Math.min(w,i*10);return <circle key={i} cx={x} cy="0" r=".20" fill="#f2e6ff" stroke="#553978" strokeWidth=".07"/>;})}</g>}
     {type==='chair'&&<path d={`M ${-w*.3} ${-h*.22} L ${w*.3} ${-h*.22}`} stroke="#263a54" strokeWidth=".18" strokeLinecap="round"/>}
     {type==='stage'&&<><path d={`M ${-w/2} ${-h/2} L ${w/2} ${h/2} M ${w/2} ${-h/2} L ${-w/2} ${h/2}`} stroke="#866039" strokeWidth=".08" strokeOpacity=".6"/></>}
     {type==='stairs'&&<g pointerEvents="none"><line x1={-w/2+.15} x2={w/2-.15} y1={-h/2+.13} y2={-h/2+.13} stroke="#fff3a2" strokeWidth=".22"/><text x="0" y={-h/2+.52} fontSize=".42" fontWeight="800" textAnchor="middle" fill="#fff3a2">TOP / STAGE</text>{[1,2].map(i=><line key={i} x1={-w/2+.12} x2={w/2-.12} y1={-h/2+h*i/3} y2={-h/2+h*i/3} stroke="#675a4c" strokeWidth=".09"/>)}</g>}
     {type==='stairs'&&stageLink&&<g pointerEvents="none"><circle cx={w/2-.27} cy={h/2-.28} r=".3" fill="#4ade80" stroke="#123b2a" strokeWidth=".07"/><text x={w/2-.27} y={h/2-.28} fontSize=".36" fontWeight="800" fill="#083519" textAnchor="middle" dominantBaseline="middle">✓</text></g>}
     {type==='dance'&&<><path d={`M ${-w/2} 0 H ${w/2} M 0 ${-h/2} V ${h/2}`} stroke="#806180" strokeWidth=".1" strokeDasharray=".7,.4"/></>}
+    {type==='pipeDrape'&&<text pointerEvents="none" x="0" y="-.45" textAnchor="middle" fill="#f1e4ff" fontSize=".65" fontWeight="700">{number(w)} ft PIPE &amp; DRAPE</text>}
     {caption&&<g pointerEvents="none">
       <text textAnchor="middle" y={-Math.min(h*.14,.6)} dominantBaseline="central" fontWeight="700" fontSize={fontSize} fill="#183038">{caption}</text>
       {['stage','dance','stairs','bar'].includes(type)&&<text textAnchor="middle" y={Math.min(h*.21,1)} dominantBaseline="central" fontWeight="700" fontSize={Math.min(.9,fontSize*.78)} fill={type==='stage'?'#f0f3f8':'#183038'}>{number(w)} × {number(h)} ft</text>}
@@ -274,7 +280,8 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
     const n=layout.objects.length;
     const obj={id:uid(),catalog:cat.key,type:cat.type,label:cat.title,x:cap(w/2+(n%4)*.75,0,w),
       y:cap(h/2+(n%3)*.75,0,h),w:cat.w,h:cat.h,rot:0,
-      ...(cat.type==='stage'?{heightInches:16}:{} )};
+      ...(cat.type==='stage'?{heightInches:16}:{} ),
+      ...(cat.type==='pipeDrape'?{heightFeet:8}:{} )};
     const chairs=addTableWithChairs?chairsForTable(obj):[];
     commit({objects:[...layout.objects,obj,...chairs]});
     selectEntity(obj.id);setPanels(p=>({...p,catalog:false}));
@@ -556,16 +563,17 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
             <div className="ip-field-grid">
               <XYField key={chosen.id+'x'} label="X position (ft)" value={Number(chosen.x.toFixed(2))} onCommit={x=>updateObject(chosen.id,{x})} max={w}/>
               <XYField key={chosen.id+'y'} label="Y position (ft)" value={Number(chosen.y.toFixed(2))} onCommit={y=>updateObject(chosen.id,{y})} max={h}/>
-              <XYField key={chosen.id+'w'} label={chosen.type==='stage'?'Width (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Width (3 ft increments)':'Width (ft)'}
-                value={chosen.w} min={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
+              <XYField key={chosen.id+'w'} label={chosen.type==='pipeDrape'?'Drape run length (ft)':chosen.type==='stage'?'Width (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Width (3 ft increments)':'Width (ft)'}
+                value={chosen.w} min={chosen.type==='pipeDrape'?1:chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
                 step={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
                 onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'w',val):updateObject(chosen.id,{w:val})}/>
-              <XYField key={chosen.id+'h'} label={chosen.type==='stage'?'Depth (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Depth (3 ft increments)':'Depth (ft)'}
+              {chosen.type!=='pipeDrape'&&<XYField key={chosen.id+'h'} label={chosen.type==='stage'?'Depth (4 ft increments)':chosen.type==='dance'&&!chosen.customSize?'Depth (3 ft increments)':'Depth (ft)'}
                 value={chosen.h} min={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
                 step={chosen.type==='stage'?4:chosen.type==='dance'&&!chosen.customSize?3:.25}
-                onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'h',val):updateObject(chosen.id,{h:val})}/>
+                onCommit={val=>['stage','dance'].includes(chosen.type)?updateModuleSize(chosen,'h',val):updateObject(chosen.id,{h:val})}/>}
               <XYField key={chosen.id+'r'} label="Angle (°)" value={chosen.rot||0} step={1} max={359} onCommit={val=>updateObject(chosen.id,{rot:val})}/>
             </div>
+            {chosen.type==='pipeDrape'&&<><XYField key={chosen.id+'drapeHeight'} label="Drape height (ft)" value={Math.min(8,Math.max(1,Number(chosen.heightFeet)||8))} min={1} max={8} step={.25} onCommit={heightFeet=>updateObject(chosen.id,{heightFeet})}/><p className="ip-help">Each horizontal bay spans up to 10 ft, with an upright at each connection. Drape height can be 1–8 ft. Increasing the run automatically adds more bays.</p></>}
             {chosen.type==='stage'&&<><XYField key={chosen.id+'height'} label="Stage height (inches)" value={Number(chosen.heightInches)||16} min={4} max={72} step={1} onCommit={heightInches=>updateObject(chosen.id,{heightInches})}/><p className="ip-help">Bil-Jax stage uses 4 × 4 ft sections. Default top-of-deck height is 16″.</p></>}
             {chosen.type==='stairs'&&<><p className="ip-help">The yellow TOP / STAGE line is the high end of the stairs. Rotate and position it along the outside edge of a stage to connect them automatically.</p>{stageLink?<p className="ip-help" role="status" style={{color:'#63edaa',fontWeight:700}}>✓ Linked to stage · stairs automatically match its {stageLink.stageHeightInches}″ deck height, including future stage-height changes.</p>:<p className="ip-help">Not connected to a stage yet · stairs use {Number(chosen.heightInches)||16}″ height until attached.</p>}</>}
             {chosen.type==='dance'&&<label className="ip-check ip-custom-dance">
@@ -626,7 +634,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
           </label>
           <label className="ip-field">Chair style
             <select value={optimizeChair} onChange={e=>{setOptimizeChair(e.target.value);setOptimizerPreview(null);}}>
-              <option value="folding">Folding chairs</option><option value="chiavari">Chiavari chairs</option>
+              <option value="folding">Folding chairs</option><option value="resin">Resin chairs</option>
             </select>
           </label>
           {optimizeTable==='chairsOnly'&&<div className="ip-seating-options">
@@ -694,7 +702,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
           <p className="ip-help">Roomy, balanced and maximum use different estimated gaps. Door buffer zones and existing objects are accounted for conservatively, but human circulation, accessibility, tent poles, anchoring, and exit requirements still need review.</p>
         </>}
         </section>
-        <FoldSection title="Add equipment" open={panels.catalog} onToggle={()=>setPanels(p=>({...p,catalog:!p.catalog}))}><label className="ip-check" style={{marginBottom:10}}><input type="checkbox" checked={addTableWithChairs} onChange={e=>setAddTableWithChairs(e.target.checked)}/> Add chairs automatically when placing a dining table</label><label className="ip-field">Chair style<select value={optimizeChair} onChange={e=>setOptimizeChair(e.target.value)}><option value="folding">Folding</option><option value="chiavari">Chiavari</option></select></label><p className="ip-help">6 ft: up to 8 seats (including ends). 8 ft: up to 10. 60″ round: up to 10. Select any table later to add or replace its chairs.</p><div className="ip-catalog">
+        <FoldSection title="Add equipment" open={panels.catalog} onToggle={()=>setPanels(p=>({...p,catalog:!p.catalog}))}><label className="ip-check" style={{marginBottom:10}}><input type="checkbox" checked={addTableWithChairs} onChange={e=>setAddTableWithChairs(e.target.checked)}/> Add chairs automatically when placing a dining table</label><label className="ip-field">Chair style<select value={optimizeChair} onChange={e=>setOptimizeChair(e.target.value)}><option value="folding">Folding</option><option value="resin">Resin</option></select></label><p className="ip-help">6 ft: up to 8 seats (including ends). 8 ft: up to 10. 60″ round: up to 10. Select any table later to add or replace its chairs.</p><div className="ip-catalog">
           {CATALOG.map(cat=><button key={cat.key} onClick={()=>addObject(cat)} title={cat.title}><span className={'ip-swatch ip-'+cat.type}/><span>{cat.title}</span></button>)}
         </div></FoldSection>
         <FoldSection title="Doors & sidewalls" open={panels.access} onToggle={()=>setPanels(p=>({...p,access:!p.access}))} count={layout.doors.length}>

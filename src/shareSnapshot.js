@@ -12,7 +12,7 @@ export function makeSharedTent(t){
       objects:interior.objects.map(o=>({
         id:o.id,catalog:o.catalog,type:o.type,label:o.label,
         x:o.x,y:o.y,w:o.w,h:o.h,rot:o.rot,
-        heightInches:o.heightInches,tableId:o.tableId
+        heightInches:o.heightInches,heightFeet:o.heightFeet,tableId:o.tableId
       })),
       doors:interior.doors.map(d=>({wall:d.wall,at:d.at,width:d.width}))
     }:null
