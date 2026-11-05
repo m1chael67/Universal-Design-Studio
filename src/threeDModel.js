@@ -104,7 +104,7 @@ function westCoastRoof(root,p,opacity){
   const canopy=new THREE.Mesh(geometry,material(WHITE,opacity));
   canopy.castShadow=true;canopy.receiveShadow=true;root.add(canopy);
 }
-// Render a double-tube rafter/hip with a lower structural tube; not a tube cut list.
+// Draw single stock-tube rafters. Optional structural braces are separate members.
 function frameRafter(root,start,end,doubleTube){
   post(root,start,end,.077);
   if(doubleTube){
@@ -156,6 +156,21 @@ function addWestCoastStructure(root,{length,width,eave,roofMode,frameVisible}){
     }
   }
   if(p.familyWidth===40){
+    // Single-tube 40-wide roof with six-way perimeter side tees and extra
+    // roof rafters. The 40-wide scheme is a visual reference, not a BOM.
+    // Four 6-way tees at the side near the hipped ends, two on end walls.
+    for(const tee of p.sideSixWayTees){
+      frameFitting(root,tee.x,eave,tee.z,true);
+      // The fitting is wider than an ordinary tee: visible extra angled ports.
+      // Render short sockets rather than unsupported full-length members.
+      const end=tee.x===a||tee.x===b;
+      const dir=end?(tee.x===a?1:-1):0;
+      for(const side of [-1,1]){
+        const vx=end?dir*.42:side*.32;
+        const vz=end?side*.32:-Math.sign(tee.z)*.42;
+        post(root,[tee.x,eave,tee.z],[tee.x+vx,eave+.22,tee.z+vz],.095);
+      }
+    }
     // ETS 40-wide quarter sections: each four-way diagonal hip has a 6-way
     // joint connected to the corner and the adjacent end/side tee fittings.
     for(const joint of p.hipJoints){
@@ -163,11 +178,15 @@ function addWestCoastStructure(root,{length,width,eave,roofMode,frameVisible}){
       const endX=leftEnd?a:b;
       const crownX=leftEnd?p.left:p.right;
       const sign=Math.sign(joint.z),j=[joint.x,joint.y,joint.z];
-      frameRafter(root,[crownX,p.ridge,0],j,true);
-      frameRafter(root,j,[endX,eave,sign*d],true);
-      frameRafter(root,j,[endX,eave,sign*10],true);
-      frameRafter(root,j,[joint.x,eave,sign*d],true);
+      frameRafter(root,[crownX,p.ridge,0],j,false);
+      frameRafter(root,j,[endX,eave,sign*d],false);
+      frameRafter(root,j,[endX,eave,sign*10],false);
+      frameRafter(root,j,[joint.x,eave,sign*d],false);
       frameFitting(root,...j,true);
+      // Additional full-length roof pole to the intermediate end-wall tee.
+      // This makes the single-tube 40-wide frame visually distinct from
+      // the simpler 20-wide layout; verify actual fitting positions on site.
+      frameRafter(root,[crownX,p.ridge,0],[endX,eave,sign*10],false);
     }
   }else{
     // Classic single hip rafter directly between each crown and corner.
@@ -183,8 +202,9 @@ function addWestCoastStructure(root,{length,width,eave,roofMode,frameVisible}){
       post(root,[x,eave+.24,-d],[x,eave+.24,d],.014,0x829498);
     }
   }
-  if(p.doubleTube){
-    // Under-ridge braces / 4-point cable layout. Simplified visual members
+  if(p.familyWidth===40){
+    // Separate rafter braces and tension lines; these are NOT duplicate
+    // parallel rafter tubes. Simplified visual members
     // based on Celina's 30- and 40-wide diagrams; do not calculate loads.
     for(const x of p.ridgeXs){
       const y=eave+p.rise*.45,reach=d*.6;

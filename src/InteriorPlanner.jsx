@@ -144,6 +144,9 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
   const [optimizerOpen,setOptimizerOpen]=useState(false);
   const [optimizeMode,setOptimizeMode]=useState('replace');
   const [optimizeTable,setOptimizeTable]=useState('auto');
+  const [chairDirection,setChairDirection]=useState('top');
+  const [chairAisleFeet,setChairAisleFeet]=useState(4);
+  const [maxChairs,setMaxChairs]=useState(250);
   const [optimizeChair,setOptimizeChair]=useState('folding');
   const [seatCounts,setSeatCounts]=useState({round5:10,round6:10,rect6:8,rect8:10});
   const [addTableWithChairs,setAddTableWithChairs]=useState(true);
@@ -220,8 +223,8 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
   const outOfBounds=layout.objects.filter(o=>exceedsTent(o,w,h));
   const seatingIdeas=useMemo(()=>optimizerOpen?recommendSeating(layout,h,w,{
     tableKey:optimizeTable,mode:optimizeMode,chairKey:optimizeChair,
-    seatCounts,spacingOffset,wallBuffer,maxTables
-  }):[],[optimizerOpen,tent.interior,h,w,optimizeTable,optimizeMode,optimizeChair,seatCounts,spacingOffset,wallBuffer,maxTables]);
+    seatCounts,spacingOffset,wallBuffer,maxTables,chairDirection,chairAisleFeet,maxChairs
+  }):[],[optimizerOpen,tent.interior,h,w,optimizeTable,optimizeMode,optimizeChair,seatCounts,spacingOffset,wallBuffer,maxTables,chairDirection,chairAisleFeet,maxChairs]);
   const counts=useMemo(()=>{
     const entries={};
     for(const o of layout.objects){const name=o.label||o.type;entries[name]=(entries[name]||0)+1;}
@@ -617,6 +620,7 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
           <label className="ip-field">Table style
             <select value={optimizeTable} onChange={e=>{setOptimizeTable(e.target.value);setOptimizerPreview(null);}}>
               <option value="auto">Automatically choose the highest seat count</option>
+              <option value="chairsOnly">Chairs only — theater / ceremony seating</option>
               {SEATING_TABLE_OPTIONS.map(t=><option key={t.key} value={t.key}>{t.name} — {seatCounts[t.key]} chairs</option>)}
             </select>
           </label>
@@ -625,8 +629,26 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
               <option value="folding">Folding chairs</option><option value="chiavari">Chiavari chairs</option>
             </select>
           </label>
+          {optimizeTable==='chairsOnly'&&<div className="ip-seating-options">
+            <strong>Chairs-only seating</strong>
+            <label className="ip-field">All chairs face
+              <select value={chairDirection} onChange={e=>{setChairDirection(e.target.value);setOptimizerPreview(null);}}>
+                <option value="top">Toward top of plan ↑</option><option value="right">Toward right →</option>
+                <option value="bottom">Toward bottom ↓</option><option value="left">Toward left ←</option>
+              </select>
+            </label>
+            <label className="ip-field">Center aisle width
+              <select value={chairAisleFeet} onChange={e=>{setChairAisleFeet(Number(e.target.value));setOptimizerPreview(null);}}>
+                {[0,3,4,5,6,8,10].map(n=><option key={n} value={n}>{n===0?'No center aisle':n+' ft'}</option>)}
+              </select>
+            </label>
+            <label className="ip-field">Maximum new chairs
+              <input type="number" min="1" max="300" value={maxChairs} onChange={e=>{setMaxChairs(Math.max(1,Math.min(300,Number(e.target.value)||1)));setOptimizerPreview(null);}}/>
+            </label>
+            <p className="ip-help">Straight rows face the chosen direction and avoid stages, doors and existing furniture. Review aisle widths, exits and occupancy in the field.</p>
+          </div>}
           <div className="ip-seating-options">
-            <strong>Seats per table</strong>
+            {optimizeTable!=='chairsOnly'&&<><strong>Seats per table</strong>
             <div className="ip-seat-settings">
               {SEATING_TABLE_OPTIONS.map(t=><label className="ip-field" key={t.key}>{t.name}
                 <select value={seatCounts[t.key]} onChange={e=>{setSeatCounts(p=>({...p,[t.key]:Number(e.target.value)}));setOptimizerPreview(null);}}>
@@ -634,8 +656,9 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
                 </select>
               </label>)}
             </div>
+            </>}
             <div className="ip-field-grid">
-              <label className="ip-field">Additional table gap (ft)
+              <label className="ip-field">Additional spacing (ft)
                 <select value={spacingOffset} onChange={e=>{setSpacingOffset(Number(e.target.value));setOptimizerPreview(null);}}>
                   {[-1,0,1,2,3,4,6].map(n=><option key={n} value={n}>{n>0?'+':''}{n} ft</option>)}
                 </select>
@@ -645,17 +668,17 @@ export default function InteriorPlanner({tent,onChange,onClose,onUndo,onRedo,can
                   {[0,1,2,3,4,5,6,8].map(n=><option key={n} value={n}>{n} ft</option>)}
                 </select>
               </label>
-              <label className="ip-field">Maximum new tables
+              {optimizeTable!=='chairsOnly'&&<label className="ip-field">Maximum new tables
                 <input type="number" min="1" max="80" value={maxTables} onChange={e=>{setMaxTables(Math.max(1,Math.min(80,Number(e.target.value)||1)));setOptimizerPreview(null);}}/>
-              </label>
+              </label>}
             </div>
           </div>
           <div className="ip-optimizer-cards">
             {seatingIdeas.map(idea=><div key={idea.key} className={'ip-opt-card '+(optimizerPreview?.key===idea.key?'ip-opt-active':'')}>
               <div className="ip-opt-head"><strong>{idea.name}</strong><span>{idea.totalSeats} seats</span></div>
               <p>{idea.description}</p>
-              <p><strong>{idea.tableCount}</strong> new {idea.tableName} tables • <strong>{idea.newChairs}</strong> chairs ({idea.seatsPerTable} per table)</p>
-              <p>Target between-group gap: <strong>{fmt(idea.aisleEstimate)} ft</strong> (not a verified aisle width)</p>
+              {idea.chairOnly?<p><strong>{idea.newChairs}</strong> chairs in rows · no tables · facing {idea.chairDirection}</p>:<p><strong>{idea.tableCount}</strong> new {idea.tableName} tables • <strong>{idea.newChairs}</strong> chairs ({idea.seatsPerTable} per table)</p>}
+              <p>{idea.chairOnly?'Approximate clear space between chair rows':'Target between-group gap'}: <strong>{fmt(idea.aisleEstimate)} ft</strong> (not a verified aisle width)</p>
               <p>Estimated efficiency: <strong>{(100*idea.totalSeats/Math.max(1,w*h)).toFixed(1)}</strong> seats / 100 sq ft • clusters occupy about <strong>{idea.estimatedUsage}%</strong> of tent area</p>
               {idea.tableAngle===90&&<p>Tables rotated 90° for a more efficient fit.</p>}
               <div className="ip-tool-row">

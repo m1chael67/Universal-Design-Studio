@@ -16,7 +16,7 @@ test('Celina Classic/ETS 30x60: 8-ft roof pitch, 15-ft bays',()=>{
   assert.equal(p.rise,8);assert.equal(p.ridge,15);
   assert.equal(p.legCount,12);assert.deepEqual(p.bayLengths,[15,15,15,15]);
   assert.deepEqual(p.ridgeXs,[-15,0,15]);
-  assert.equal(p.doubleTube,true);
+  assert.equal(p.doubleTube,false);
 });
 test('30x40 uses mixed 15/10/15 bays shown in Celina layout handbook',()=>{
   const p=westCoastProfile(40,30,7);
@@ -32,6 +32,8 @@ test('Celina 40x80 ETS: 10-ft bays, 10-ft pitch, four quarter-hip joints and 24 
   assert.deepEqual(p.endLegZs,[-10,0,10]);
   assert.equal(p.crownCount,2);assert.equal(p.ridgeCrownCount,3);
   assert.equal(p.verifiedFamily,true);
+  assert.equal(p.doubleTube,false);
+  assert.equal(p.sideSixWayTees.length,6);
 });
 test('Custom sizes display an explicit approximated frame profile',()=>{
   const p=westCoastProfile(47,26,7);

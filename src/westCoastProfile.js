@@ -12,8 +12,8 @@ const profiles={
   10:{pitch:2.5,bay:10,endSpans:[],family:'Celina Classic 10 ft'},
   15:{pitch:3.75,bay:15,endSpans:[],family:'Celina Classic 15 ft'},
   20:{pitch:5,bay:10,endSpans:[0],family:'Celina Classic 20 ft'},
-  30:{pitch:8,bay:15,endSpans:[0],family:'Celina Classic/ETS 30 ft'},
-  40:{pitch:10,bay:10,endSpans:[-10,0,10],family:'Celina ETS double-tube 40 ft'}
+  30:{pitch:8,bay:15,endSpans:[0],family:'30 ft West Coast · single-tube conceptual frame'},
+  40:{pitch:10,bay:10,endSpans:[-10,0,10],family:'40 ft West Coast · single-tube conceptual frame'}
 };
 const round=n=>Number(n.toFixed(5));
 function frameSpans(length,width,family){
@@ -56,15 +56,20 @@ export function westCoastProfile(length,width,eave=7){
   const hipJoints=family===40?[-1,1].flatMap(sign=>[-1,1].map(side=>({
     x:sign*(length/2-10),z:side*10,y:eave+rise*.5
   }))):[];
+  const sideSixWayTees=family===40&&xs.length>=3?[
+    ...[-width/2,width/2].flatMap(z=>[xs[1],xs.at(-2)].map(x=>({x,z}))),
+    {x:-length/2,z:0},{x:length/2,z:0}
+  ]:[];
   const supported=Boolean(cfg)&&length>=width&&
     (family!==15||length%15===0||[20,40,50,70,80,100,110].includes(length))&&
     (family!==30||length%15===0||length===40||length===50);
   const bayCount=lengths.length;
   return {length,width,eave,ridge:eave+rise,rise,hip,left,right,
     xs,ridgeXs,legXs,endLegZs,legCount:2*(legXs.length+endLegZs.length),
-    bayCount,bayLengths:lengths,hipJoints,family:cfg?.family||'Generic West Coast-style approximation',
+    bayCount,bayLengths:lengths,hipJoints,sideSixWayTees,
+    family:cfg?.family||'Generic West Coast-style approximation',
     familyWidth:family,verifiedFamily:supported,
-    doubleTube:family===30||family===40,
+    doubleTube:false, // Universal's frame inventory uses single tubing, including 40-wide.
     // 6-way crowns at hip starts; 8-way at square footprint (no distinct hip ends).
     crownCount:right-left<.01?1:2,
     ridgeCrownCount:Math.max(0,ridgeXs.length-(right-left<.01?1:2)),

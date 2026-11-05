@@ -3,13 +3,13 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {buildTentScene,buildSiteScene} from './threeDModel.js';
 import {tentDimensions,siteRadius} from './tent3DMath.js';
-import {constrainedWalkPosition} from './westCoastProfile.js';
+import {exteriorPose,walkStart,walkEye,walkTarget,dragLook} from './threeDCamera.js';
 import './threeD.css';
 
-const presets=['Perspective','Top-down','Walk-through'];
+const presets=['Perspective','Walk-through'];
 export default function ThreeDViewer({tents,onClose}){
   const mount=useRef(null),renderRef=useRef(null),controlsRef=useRef(null);
-  const cameraPose=useRef(null),walkRef=useRef(false);
+  const cameraPose=useRef(null),walkRef=useRef(false),walkLook=useRef({yaw:0,pitch:0});
   const [index,setIndex]=useState(0),[siteMode,setSiteMode]=useState(false),[roofMode,setRoofMode]=useState('solid'),
     [wallVisible,setWallVisible]=useState(true),[frameVisible,setFrameVisible]=useState(true),
     [furnitureVisible,setFurnitureVisible]=useState(true),[roofStyle,setRoofStyle]=useState('westcoast'),
@@ -21,59 +21,78 @@ export default function ThreeDViewer({tents,onClose}){
   const tent=choices[Math.min(index,Math.max(0,choices.length-1))];
   const size=tent?tentDimensions(tent):null;
 
-  // A view button moves the live camera without rebuilding the scene.
   function chooseView(next){
-    if(next==='Walk-through'&&siteMode){setSiteMode(false);cameraPose.current=null;}
     setView(next);
-    walkRef.current=next==='Walk-through';
+    if(next==='Walk-through'&&siteMode){
+      cameraPose.current=null;setSiteMode(false);walkRef.current=true;return;
+    }
     const state=controlsRef.current;
     if(!state)return;
-    const {camera,controls,radius,dimension}=state;
-    const {length,width,legHeight:eave}=dimension;
-    const target=new THREE.Vector3(0,Math.min(eave*.65,5),0);
-    controls.enablePan=next!=='Walk-through';
-    controls.enableZoom=next!=='Walk-through';
-    controls.minDistance=next==='Walk-through'?3:2;
-    controls.maxDistance=next==='Walk-through'?Math.min(9,width*.4):radius*6;
-    controls.minPolarAngle=next==='Walk-through'?Math.PI*.34:.02;
-    controls.maxPolarAngle=next==='Walk-through'?Math.PI*.62:Math.PI*.495;
-    if(next==='Top-down'){
-      camera.position.set(0,Math.max(20,radius*1.65),.001);
-      target.set(0,0,0);
-    }else if(next==='Walk-through'){
-      camera.position.set(-length*.2,Math.min(5.3,eave-1.5),0);
-      target.set(-length*.2+Math.min(6,length*.25),Math.min(5.3,eave-1.5),0);
+    const {camera,controls,radius,dimension:{length,width,legHeight:eave}}=state;
+    walkRef.current=next==='Walk-through';
+    if(next==='Walk-through'){
+      walkLook.current={yaw:0,pitch:0};
+      controls.enabled=false;camera.fov=75;camera.updateProjectionMatrix();
+      const p=walkStart(length,width,eave);
+      camera.position.set(p.x,p.y,p.z);
+      const t=walkTarget(p,0,0);controls.target.set(t.x,t.y,t.z);
+      camera.lookAt(controls.target);
     }else{
-      camera.position.set(radius*.94,radius*.67,radius*.9);
+      controls.enabled=true;camera.fov=48;camera.updateProjectionMatrix();
+      const p=exteriorPose(length,width,eave,camera.aspect,siteMode?radius:0);
+      camera.position.set(p.position.x,p.position.y,p.position.z);
+      controls.target.set(p.target.x,p.target.y,p.target.z);
+      controls.minDistance=Math.max(3,p.distance*.52);
+      controls.maxDistance=p.distance*2.7;controls.update();
     }
-    controls.target.copy(target);controls.update();
     cameraPose.current=null;
   }
   function switchTent(next){
-    cameraPose.current=null;walkRef.current=false;setSelectedItem(null);setView('Perspective');
-    if(next==='all'){setSiteMode(true);}else{setSiteMode(false);setIndex(Number(next));}
+    cameraPose.current=null;walkRef.current=false;walkLook.current={yaw:0,pitch:0};
+    setSelectedItem(null);setView('Perspective');
+    if(next==='all')setSiteMode(true);
+    else {setSiteMode(false);setIndex(Number(next));}
   }
   function moveWalk(direction){
     const state=controlsRef.current;
     if(!state||!walkRef.current)return;
     const {camera,controls,dimension:{length,width,legHeight:eave}}=state;
-    const forward=new THREE.Vector3().subVectors(controls.target,camera.position);forward.y=0;
-    if(forward.lengthSq()<.001)forward.set(1,0,0);
-    forward.normalize();
-    const right=new THREE.Vector3(-forward.z,0,forward.x);
-    const delta=(direction==='forward'?forward:direction==='back'?forward.clone().negate():direction==='right'?right:right.negate()).multiplyScalar(2);
-    const target=controls.target.clone().add(delta),position=camera.position.clone().add(delta);
-    const bounded=constrainedWalkPosition(position,target,length,width,eave);
-    camera.position.set(bounded.position.x,bounded.position.y,bounded.position.z);
-    controls.target.set(bounded.target.x,bounded.target.y,bounded.target.z);
-    controls.update();
+    const yaw=walkLook.current.yaw;
+    const f=new THREE.Vector3(Math.cos(yaw),0,Math.sin(yaw));
+    const r=new THREE.Vector3(-Math.sin(yaw),0,Math.cos(yaw));
+    const delta=(direction==='forward'?f:direction==='back'?f.clone().negate():
+      direction==='right'?r:r.negate()).multiplyScalar(2);
+    const p=walkEye(camera.position.clone().add(delta),length,width,eave);
+    camera.position.set(p.x,p.y,p.z);
+    const t=walkTarget(p,walkLook.current.yaw,walkLook.current.pitch);
+    controls.target.set(t.x,t.y,t.z);camera.lookAt(controls.target);
   }
   useEffect(()=>{
     if(!tent||!mount.current)return;
     const host=mount.current,id=siteMode?'all-site':String(tent.id||index);
     let scene,renderer,camera,controls,observer,animation=0,model,down=null,handleResize=null;
-        const onDown=e=>{down={x:e.clientX,y:e.clientY};};
+    let gesture=null;
+    const onDown=e=>{
+      down={x:e.clientX,y:e.clientY};
+      if(!walkRef.current||e.button!==0)return;
+      gesture={id:e.pointerId,x:e.clientX,y:e.clientY};
+      renderer?.domElement?.setPointerCapture?.(e.pointerId);
+    };
+    const onMove=e=>{
+      if(!walkRef.current||!gesture||gesture.id!==e.pointerId)return;
+      const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
+      gesture.x=e.clientX;gesture.y=e.clientY;
+      walkLook.current=dragLook(walkLook.current,dx,dy);
+      if(camera&&controls){
+        const t=walkTarget(camera.position,walkLook.current.yaw,walkLook.current.pitch);
+        controls.target.set(t.x,t.y,t.z);camera.lookAt(controls.target);
+      }
+    };
     const onUp=e=>{
+      if(gesture?.id===e.pointerId){
+        if(renderer?.domElement?.hasPointerCapture?.(e.pointerId))renderer.domElement.releasePointerCapture(e.pointerId);
+        gesture=null;
+      }
       if(!down||!renderer||Math.hypot(e.clientX-down.x,e.clientY-down.y)>7){down=null;return;}
       down=null;
       const rect=renderer.domElement.getBoundingClientRect();
@@ -90,24 +109,18 @@ export default function ThreeDViewer({tents,onClose}){
       const {length,width}=tentDimensions(tent);
       const radius=siteMode?siteRadius(choices):Math.max(length,width,20);
       scene=new THREE.Scene();scene.background=new THREE.Color(0x1c303a);
-      camera=new THREE.PerspectiveCamera(48,1,.1,Math.max(1500,radius*10));
-      camera.position.set(radius*.94,radius*.67,radius*.9);
+      camera=new THREE.PerspectiveCamera(view==='Walk-through'?75:48,1,.08,Math.max(1500,radius*10));
       renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:false});
       renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
       renderer.outputColorSpace=THREE.SRGBColorSpace;
       renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
       host.appendChild(renderer.domElement);
       controls=new OrbitControls(camera,renderer.domElement);
-      controls.target.set(0,Math.min(legHeight*.65,5),0);
-      controls.enableDamping=true;controls.dampingFactor=.11;
-      controls.maxPolarAngle=Math.PI*.495;controls.minPolarAngle=.02;
-      controls.minDistance=2;controls.maxDistance=radius*6;
-      controls.enablePan=view!=='Walk-through';
-      controls.enableZoom=view!=='Walk-through';
-      if(view==='Walk-through'){
-        controls.minDistance=3;controls.maxDistance=Math.min(9,width*.4);
-        controls.minPolarAngle=Math.PI*.34;controls.maxPolarAngle=Math.PI*.62;
-      }
+      controls.target.set(0,Math.min(legHeight*.55,5),0);
+      controls.enableDamping=true;controls.dampingFactor=.075;
+      controls.rotateSpeed=.38;controls.zoomSpeed=.65;
+      controls.maxPolarAngle=Math.PI*.58;controls.minPolarAngle=.10;
+      controls.enablePan=false;controls.enabled=view!=='Walk-through';
       walkRef.current=view==='Walk-through';
       scene.add(new THREE.HemisphereLight(0xf1fbff,0x6e8181,2.2));
       const sun=new THREE.DirectionalLight(0xffffff,2.5);
@@ -127,36 +140,44 @@ export default function ThreeDViewer({tents,onClose}){
       model=siteMode?buildSiteScene(scene,choices,options):buildTentScene(scene,tent,options);
       setSummary({bays:model.bays,walls:model.walls?.rendered||0,doors:model.walls?.doors||0,
         items:model.visibleObjects,ridge:model.ridge,frameProfile:model.frameProfile});
-      if(cameraPose.current?.id===id){
-        camera.position.fromArray(cameraPose.current.position);
-        controls.target.fromArray(cameraPose.current.target);
-      }else if(view==='Top-down'){
-        camera.position.set(0,radius*1.65,.001);controls.target.set(0,0,0);
-      }else if(view==='Walk-through'){
-        camera.position.set(-length*.2,Math.min(5.3,legHeight-1.5),0);
-        controls.target.set(-length*.2+Math.min(6,length*.25),Math.min(5.3,legHeight-1.5),0);
-      }
-      controls.update();
-            controlsRef.current={camera,controls,radius,dimension:{length,width,legHeight}};
       handleResize=()=>{
         if(!renderer||!camera)return;
         const w=Math.max(1,host.clientWidth),h=Math.max(1,host.clientHeight);
         camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);
       };
+      handleResize();
+      const defaultPose=exteriorPose(length,width,legHeight,camera.aspect,siteMode?radius:0);
+      controls.minDistance=Math.max(3,defaultPose.distance*.52);
+      controls.maxDistance=defaultPose.distance*2.7;
+      if(view==='Walk-through'&&!siteMode){
+        controls.enabled=false;
+        const p=walkStart(length,width,legHeight);walkLook.current={yaw:0,pitch:0};
+        camera.position.set(p.x,p.y,p.z);
+        const t=walkTarget(p,0,0);controls.target.set(t.x,t.y,t.z);
+        camera.lookAt(controls.target);
+      }else if(cameraPose.current?.id===id&&cameraPose.current.mode==='Perspective'){
+        camera.position.fromArray(cameraPose.current.position);
+        controls.target.fromArray(cameraPose.current.target);controls.update();
+      }else{
+        camera.position.set(defaultPose.position.x,defaultPose.position.y,defaultPose.position.z);
+        controls.target.set(defaultPose.target.x,defaultPose.target.y,defaultPose.target.z);
+        controls.update();
+      }
+      controlsRef.current={camera,controls,radius,dimension:{length,width,legHeight}};
       if(typeof ResizeObserver!=='undefined'){observer=new ResizeObserver(handleResize);observer.observe(host);}
       else window.addEventListener('resize',handleResize);
       handleResize();
       renderer.domElement.addEventListener('pointerdown',onDown);
+      renderer.domElement.addEventListener('pointermove',onMove);
       renderer.domElement.addEventListener('pointerup',onUp);
       const tick=()=>{
         animation=requestAnimationFrame(tick);
-        controls.update();
         if(walkRef.current&&!siteMode){
-          const bounded=constrainedWalkPosition(camera.position,controls.target,length,width,legHeight);
-          camera.position.set(bounded.position.x,bounded.position.y,bounded.position.z);
-          controls.target.set(bounded.target.x,bounded.target.y,bounded.target.z);
-          camera.lookAt(controls.target);
-        }
+          const eye=walkEye(camera.position,length,width,legHeight);
+          camera.position.set(eye.x,eye.y,eye.z);
+          const t=walkTarget(eye,walkLook.current.yaw,walkLook.current.pitch);
+          controls.target.set(t.x,t.y,t.z);camera.lookAt(controls.target);
+        }else controls.update();
         renderer.render(scene,camera);
       };
       tick();
@@ -173,12 +194,13 @@ export default function ThreeDViewer({tents,onClose}){
     }catch(err){setError('3D rendering is unavailable: '+(err.message||err));}
     return ()=>{
       if(camera&&controls)cameraPose.current={
-        id,position:camera.position.toArray(),target:controls.target.toArray()
+        id,mode:walkRef.current?'Walk-through':'Perspective',position:camera.position.toArray(),target:controls.target.toArray()
       };
       cancelAnimationFrame(animation);
       observer?.disconnect();
       if(handleResize)window.removeEventListener('resize',handleResize);
       renderer?.domElement?.removeEventListener('pointerdown',onDown);
+      renderer?.domElement?.removeEventListener('pointermove',onMove);
       renderer?.domElement?.removeEventListener('pointerup',onUp);
       controls?.dispose();
       scene?.traverse(obj=>{
@@ -199,7 +221,7 @@ export default function ThreeDViewer({tents,onClose}){
   },[onClose]);
   return <div className="three-d-backdrop" role="dialog" aria-modal="true" aria-label="Interactive 3D tent preview">
     <div className="three-d-shell">
-      <header><div><strong>3D Tent Viewer</strong><small>Concept model · drag to orbit · scroll/pinch to zoom · tap furniture for details</small></div>
+      <header><div><strong>3D Tent Viewer</strong><small>Centered Perspective orbit · Walk-through: drag or swipe to look freely</small></div>
         <button type="button" onClick={onClose}>Close ×</button>
       </header>
       <div className="three-d-tools">
@@ -212,7 +234,7 @@ export default function ThreeDViewer({tents,onClose}){
         </select></label>
         <label>Leg height<select value={legHeight} onChange={e=>setLegHeight(Number(e.target.value))}>
           <option value={7}>7 ft</option><option value={8}>8 ft</option><option value={9}>9 ft</option>
-          <option value={10}>10 ft</option><option value={12}>12 ft</option>
+          <option value={10}>10 ft</option>
         </select></label>
         {roofStyle==='westcoast'?<span className="three-d-auto-bay" title="West Coast side-tee spacing follows the selected Celina tent family">Celina frame spacing · automatic</span>:<label>Bay size<select value={baySpacing} onChange={e=>setBaySpacing(Number(e.target.value))}>
           <option value={10}>10 ft</option><option value={15}>15 ft</option><option value={20}>20 ft</option>
@@ -237,7 +259,7 @@ export default function ThreeDViewer({tents,onClose}){
         <button type="button" onClick={()=>moveWalk('left')}>← Left</button>
         <button type="button" onClick={()=>moveWalk('right')}>Right →</button>
         <button type="button" onClick={()=>moveWalk('back')}>↓ Back 2 ft</button>
-        <small>Drag to look around. Camera and movement stay within the tent footprint.</small>
+        <small>Drag or swipe to look up, down and around. The camera stays inside the tent.</small>
       </div>}
       <div className="three-d-viewport" ref={mount}>
         {!tent&&<p>No visible tents yet. Add a tent to the satellite plan first.</p>}

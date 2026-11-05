@@ -79,3 +79,32 @@ test('stage stairs remain fixed while generating table seating',()=>{
   const r=recommendSeating({objects:[stairs],doors:[]},30,45,{...settings,tableKey:'rect6'});
   for(const x of r)assert.ok(x.baseObjects.some(o=>o.id===stairs.id));
 });
+
+test('chairs-only optimizer places only chairs, oriented toward chosen side',()=>{
+  for(const [direction,rotation] of [['top',180],['right',270],['bottom',0],['left',90]]){
+    const r=recommendSeating(empty(),30,60,{tableKey:'chairsOnly',mode:'replace',
+      chairDirection:direction,maxChairs:80,chairAisleFeet:4});
+    assert.equal(r.length,3);
+    for(const plan of r){
+      assert.equal(plan.tableCount,0);
+      assert.ok(plan.newChairs>0&&plan.newChairs<=80);
+      assert.ok(plan.newObjects.every(o=>o.type==='chair'&&o.rot===rotation));
+    }
+  }
+});
+test('chairs-only retains stages and avoids the specified center aisle',()=>{
+  const stage={id:'stage',type:'stage',x:25,y:3,w:12,h:6,rot:0};
+  const r=recommendSeating({objects:[stage],doors:[]},30,50,{
+    tableKey:'chairsOnly',chairDirection:'top',chairAisleFeet:6,maxChairs:180});
+  for(const plan of r){
+    assert.ok(plan.baseObjects.includes(stage));
+    assert.ok(plan.newObjects.every(o=>Math.abs(o.x-25)>=6/2+1.45/2));
+    assert.ok(plan.newObjects.every(o=>Math.abs(o.x-stage.x)>stage.w/2+.7||Math.abs(o.y-stage.y)>stage.h/2+.7));
+  }
+});
+test('chairs-only fill mode preserves existing tables',()=>{
+  const table={id:'tbl',type:'table',catalog:'rect8',x:20,y:10,w:8,h:2.5,rot:0};
+  const r=recommendSeating({objects:[table],doors:[]},20,40,{
+    tableKey:'chairsOnly',mode:'fill',chairDirection:'right',maxChairs:50});
+  assert.ok(r.every(plan=>plan.baseObjects.includes(table)));
+});

@@ -109,13 +109,77 @@ function tryTable(t,level,layout,width,length,chairKey,mode,opts){
     baseObjects:base,newObjects:created,mode
   };
 }
+function chairOnlyLayout(level,layout,width,length,chairKey,mode,opts){
+  const previous=normObjects(layout.objects);
+  const base=mode==='replace'?previous.filter(o=>!isSeating(o)):previous;
+  const obstacles=base.map(o=>fixtureClearance(o,level));
+  for(const door of layout.doors||[])obstacles.push(doorReservation(door,width,length));
+  const chairW=1.45,chairH=1.45;
+  const direction=opts.chairDirection||'top';
+  const rotations={top:180,right:270,bottom:0,left:90};
+  const frontToBack=direction==='top'||direction==='bottom';
+  const chairRotation=rotations[direction]??180;
+  // Auditorium-style straight rows, all facing the same direction.
+  // Conservative wider spacing for the comfortable alternative.
+  const sideStep=Math.max(1.72,(level.key==='comfortable'?2.75:level.key==='balanced'?2.3:1.85)+opts.spacingOffset*.18);
+  const rowStep=Math.max(2.05,(level.key==='comfortable'?3.8:level.key==='balanced'?3.2:2.55)+opts.spacingOffset*.28);
+  const edge=Math.max(chairW/2+0.5,level.edge+opts.wallBuffer);
+  const bounds={x0:edge,x1:length-edge,y0:edge,y1:width-edge};
+  const max=opts.maxChairs,chairs=[];
+  const rows=[],columns=[];
+  function sequence(low,high,step,reverse=false){
+    const values=[];
+    for(let v=low;v<=high+.001;v+=step)values.push(Number(v.toFixed(3)));
+    return reverse?values.reverse():values;
+  }
+  if(frontToBack){
+    rows.push(...sequence(bounds.y0,bounds.y1,rowStep,direction==='bottom'));
+    columns.push(...sequence(bounds.x0,bounds.x1,sideStep));
+  }else{
+    rows.push(...sequence(bounds.x0,bounds.x1,rowStep,direction==='right'));
+    columns.push(...sequence(bounds.y0,bounds.y1,sideStep));
+  }
+  const aisle=Math.max(0,opts.chairAisleFeet);
+  const accepted=[];
+  rowLoop:for(const row of rows){
+    for(const column of columns){
+      const x=frontToBack?column:row,y=frontToBack?row:column;
+      const across=frontToBack?x:y,span=frontToBack?length:width;
+      if(aisle>0&&Math.abs(across-span/2)<(aisle/2+chairW/2))continue;
+      const box=rect(x,y,chairW,chairH);
+      if(obstacles.some(o=>overlaps(box,o,.35)))continue;
+      if(accepted.some(o=>overlaps(box,o,.10)))continue;
+      const object={id:id(),catalog:chairKey,type:'chair',
+        label:chairKey==='chiavari'?'Chiavari chair':'Folding chair',
+        x,y,w:chairW,h:chairH,rot:chairRotation,generatedBy:'optimizer'};
+      accepted.push(box);chairs.push(object);
+      if(chairs.length>=max)break rowLoop;
+    }
+  }
+  const existingChairs=base.filter(o=>o.type==='chair').length;
+  return {key:level.key,name:level.name,description:level.description,
+    chairOnly:true,chairDirection:direction,tableName:'No tables',
+    aisleEstimate:rowStep-chairH,tableCount:0,seatsPerTable:0,
+    newChairs:chairs.length,existingChairs,totalSeats:chairs.length+existingChairs,
+    estimatedUsage:Math.round(Math.min(100,chairs.length*sideStep*rowStep/Math.max(1,width*length)*100)),
+    baseObjects:base,newObjects:chairs,mode};
+}
+
 export function recommendSeating(layout,width,length,{tableKey='auto',mode='replace',chairKey='folding',
-  seatCounts={},spacingOffset=0,wallBuffer=0,maxTables=80}={}){
+  seatCounts={},spacingOffset=0,wallBuffer=0,maxTables=80,maxChairs=300,
+  chairDirection='top',chairAisleFeet=0}={}){
   const opts={
     spacingOffset:clamp(Number(spacingOffset)||0,-1,12),
     wallBuffer:clamp(Number(wallBuffer)||0,0,10),
-    maxTables:Math.max(1,Math.min(80,Math.floor(Number(maxTables)||80)))
+    maxTables:Math.max(1,Math.min(80,Math.floor(Number(maxTables)||80))),
+    maxChairs:Math.max(1,Math.min(300,Math.floor(Number(maxChairs)||300))),
+    chairDirection:['top','right','bottom','left'].includes(chairDirection)?chairDirection:'top',
+    chairAisleFeet:clamp(Number(chairAisleFeet)||0,0,15)
   };
+  if(tableKey==='chairsOnly'){
+    if(!Number.isFinite(width)||!Number.isFinite(length))return [];
+    return LEVELS.map(level=>chairOnlyLayout(level,layout,width,length,chairKey,mode,opts));
+  }
   const seatChoices={round5:[8,10],round6:[10,12],rect6:[6,8],rect8:[8,10]};
   const requested=TABLES.filter(t=>tableKey==='auto'||t.key===tableKey).map(t=>({
     ...t,seats:seatChoices[t.key].includes(Number(seatCounts[t.key]))?Number(seatCounts[t.key]):t.seats
