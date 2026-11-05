@@ -357,6 +357,11 @@ function addFurniture(root,layout,length,width,showDimensions=false){
 export function buildTentScene(scene,tent,options={}){
   const {length,width}=tentDimensions(tent);
   const layout=normalizedInterior(tent);
+  // Customer links with no configured walls should still show an enclosure.
+  // Explicitly selected walls and door openings retain their geometry.
+  if(options.customerPreview&&!Object.values(layout.sidewalls).some(Boolean)){
+    layout.sidewalls={top:true,right:true,bottom:true,left:true};
+  }
   const legHeight=clamp(Number(options.legHeight)||7,7,16);
   const roofStyle=options.roofStyle||'westcoast';
   const frameProfile=roofStyle==='westcoast'?westCoastProfile(length,width,legHeight):null;

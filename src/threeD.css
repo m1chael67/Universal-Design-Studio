@@ -31,3 +31,26 @@
 .three-d-walk button{font-size:12px;min-height:36px}
 .three-d-walk small{font-size:11px;color:#b9d3d3;margin-left:auto}
 @media(max-width:640px){.three-d-walk{padding:7px;gap:4px}.three-d-walk button{flex:1;padding:5px;font-size:11px}.three-d-walk small{width:100%;text-align:center}}
+
+/* Keep the full-size canvas accessible even when mobile toolbars wrap. */
+.three-d-backdrop{overflow:hidden}
+.three-d-shell{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;min-height:0}
+.three-d-viewport{flex:0 0 auto;height:clamp(320px,55dvh,660px);min-height:320px}
+.three-d-viewport canvas{width:100%;height:100%}
+.three-d-jump{display:none}
+@media(max-width:700px){
+ .three-d-backdrop{padding:0}
+ .three-d-shell{width:100%;height:100dvh;max-height:100dvh;border-radius:0}
+ .three-d-viewport{height:max(360px,58dvh);min-height:360px}
+ .three-d-jump{display:inline-flex;align-items:center;justify-content:center;background:#28675f;color:white;border:1px solid #79cfc2;border-radius:7px;padding:7px 10px}
+ .three-d-metrics{top:7px;left:7px;padding:6px 8px;gap:2px;max-width:68%;font-size:10px}
+ .three-d-metrics strong{font-size:13px}
+}
+@media(max-width:900px) and (orientation:landscape) and (max-height:550px){
+ .three-d-shell{height:100dvh;max-height:100dvh}
+ .three-d-shell header{padding:6px 12px}
+ .three-d-shell header small{display:none}
+ .three-d-tools,.three-d-actions,.three-d-walk{padding:5px 10px}
+ .three-d-walk small{display:none}
+ .three-d-viewport{height:max(280px,70dvh);min-height:280px}
+}

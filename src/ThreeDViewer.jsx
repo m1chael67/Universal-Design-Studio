@@ -7,7 +7,7 @@ import {exteriorPose,walkStart,walkEye,walkTarget,dragLook,WALK_FOV,PERSPECTIVE_
 import './threeD.css';
 
 const presets=['Perspective','Walk-through'];
-export default function ThreeDViewer({tents,onClose}){
+export default function ThreeDViewer({tents,onClose,customerPreview=false}){
   const mount=useRef(null),renderRef=useRef(null),controlsRef=useRef(null);
   const cameraPose=useRef(null),walkRef=useRef(false),walkLook=useRef({yaw:0,pitch:0});
   const [index,setIndex]=useState(0),[siteMode,setSiteMode]=useState(false),[roofMode,setRoofMode]=useState('solid'),
@@ -153,7 +153,7 @@ export default function ThreeDViewer({tents,onClose}){
       ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
       const grid=new THREE.GridHelper(radius*2,Math.min(80,Math.max(10,Math.round(radius))),0x8ca69a,0x557366);
       grid.position.y=.025;scene.add(grid);
-      const options={roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing,showDimensions};
+      const options={roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing,showDimensions,customerPreview};
       model=siteMode?buildSiteScene(scene,choices,options):buildTentScene(scene,tent,options);
       setSummary({bays:model.bays,walls:model.walls?.rendered||0,doors:model.walls?.doors||0,
         items:model.visibleObjects,ridge:model.ridge,frameProfile:model.frameProfile});
@@ -234,7 +234,7 @@ export default function ThreeDViewer({tents,onClose}){
       renderer?.dispose();renderer?.domElement?.remove();
       controlsRef.current=null;renderRef.current=null;
     };
-  },[tent,index,siteMode,roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing,showDimensions]);
+  },[tent,index,siteMode,roofMode,wallVisible,frameVisible,furnitureVisible,roofStyle,legHeight,baySpacing,showDimensions,customerPreview]);
   useEffect(()=>{
     const onKey=e=>{
       if(e.key==='Escape'){onClose();return;}
@@ -281,6 +281,7 @@ export default function ThreeDViewer({tents,onClose}){
           aria-pressed={roofMode==='hidden'&&frameVisible}
           onClick={()=>{setRoofMode(mode=>mode==='hidden'?'solid':'hidden');setFrameVisible(true);}}>Frame-only view</button>
         <button type="button" disabled={!tent} onClick={()=>renderRef.current?.()}>Export 3D image</button>
+        <button type="button" className="three-d-jump" onClick={()=>mount.current?.scrollIntoView({block:'center',behavior:'smooth'})}>↓ View 3D</button>
       </nav>
       {view==='Walk-through'&&!siteMode&&<div className="three-d-walk" aria-label="Walk-through navigation">
         <button type="button" onClick={()=>moveWalk('forward')}>↑ Forward 2 ft</button>
@@ -302,6 +303,7 @@ export default function ThreeDViewer({tents,onClose}){
           <button type="button" aria-label="Dismiss selected furniture" onClick={()=>setSelectedItem(null)}>×</button></div>}
       </div>
       <footer>{error&&<p role="alert">{error}</p>}
+        {customerPreview&&<p>Customer preview: when no sidewalls are selected, an enclosed tent is shown for illustration. Set sidewalls in the interior planner for an exact proposal.</p>}
         <p>Uses saved interiors and door openings. Entire-site view positions tents using project coordinates on a flat illustrative surface, not surveyed terrain. Celina-based West Coast frames are visual approximations, not pipe cut lists or engineering; confirm manufacturer specifications and site requirements.</p>
       </footer>
     </div>

@@ -66,6 +66,6 @@ export default function CustomerShare({id}){
       {project?.tents?.length>0&&<button onClick={()=>setShow3D(true)}>Explore interactive 3D</button>}</header>
     {error?<p role="alert" className="share-error">{error}</p>:!project?<p className="share-loading">Loading shared design…</p>:
       <><div className="share-map" ref={mapNode}/><p className="share-caption">Read-only design snapshot · Satellite imagery © Mapbox and contributors · Concept layout, not a field survey or engineering plan.</p></>}
-    {show3D&&<ThreeDViewer tents={project.tents} onClose={()=>setShow3D(false)}/>}
+    {show3D&&<ThreeDViewer tents={project.tents} customerPreview onClose={()=>setShow3D(false)}/>}
   </div>;
 }
