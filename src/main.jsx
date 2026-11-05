@@ -12,6 +12,7 @@ import SiteLogisticsPanel from './SiteLogisticsPanel.jsx';
 import PhotoMarkup from './PhotoMarkup.jsx';
 import ReportsPanel from './ReportsPanel.jsx';
 import ThreeDViewer from './ThreeDViewer.jsx';
+import CustomerShare from './CustomerShare.jsx';
 
 const FEET = 3.280839895;
 // Configure VITE_MAPBOX_PUBLIC_TOKEN once in Appwrite Sites environment variables.
@@ -732,4 +733,5 @@ function App(){
       onClose={()=>{setInteriorId(null);requestAnimationFrame(()=>mapRef.current?.resize());}}/>}
   </div>;
 }
-createRoot(document.getElementById('root')).render(<App/>);
+const shareId=new URLSearchParams(window.location.search).get('share');
+createRoot(document.getElementById('root')).render(shareId?<CustomerShare id={shareId}/>:<App/>);

@@ -11,6 +11,8 @@ const APPWRITE_ENDPOINT='https://nyc.cloud.appwrite.io/v1';
 const APPWRITE_PROJECT='6aea8c410001e8aed9b1';
 const DATABASE_ID='6aeb3dfa001293738040';
 const TABLE_ID='6aeb3e0500094b2a9ae4';
+const SHARE_PREFIX='[PUBLIC VIEW] ';
+const publicUrl=id=>window.location.origin+window.location.pathname+'?share='+encodeURIComponent(id);
 const client=new Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT);
 const account=new Account(client),tables=new TablesDB(client);
 
@@ -48,6 +50,9 @@ export default function CloudProjects({project,measurement,onLoadProject}){
   const [error,setError]=useState('');
   const [tableMissing,setTableMissing]=useState(false);
   const [rows,setRows]=useState([]);
+  const [shares,setShares]=useState([]);
+  const [shareBusy,setShareBusy]=useState(false);
+  const [shareMessage,setShareMessage]=useState('');
   const [activeId,setActiveId]=useState(null);
   const [saveState,setSaveState]=useState('local');
   const latestPayload=useRef(null),savedHash=useRef(''),remoteRef=useRef(null);
@@ -72,7 +77,9 @@ export default function CloudProjects({project,measurement,onLoadProject}){
       queries:[Query.limit(100),Query.orderDesc('$updatedAt')]
     });
     const filtered=response.rows.filter(x=>x.ownerId===currentUser.$id);
-    setRows(filtered);setTableMissing(false);setError('');
+    setRows(filtered.filter(x=>!x.name?.startsWith(SHARE_PREFIX)));
+    setShares(filtered.filter(x=>x.name?.startsWith(SHARE_PREFIX)));
+    setTableMissing(false);setError('');
     return filtered;
   },[]);
   async function initialize(currentUser){
@@ -215,6 +222,47 @@ export default function CloudProjects({project,measurement,onLoadProject}){
       setError('');
     }catch(err){setError(messageFor(err));}
   }
+  async function createShare(){
+    if(!user||shareBusy)return;
+    setShareBusy(true);setShareMessage('');
+    try{
+      // Publish a frozen copy. Never grant public READ to the private project row.
+      // The public snapshot excludes notes, customer/contact fields and photos.
+      const current=latestPayload.current;
+      const snapshot={name:safeName(current.name),center:current.center,zoom:current.zoom,
+        tents:(current.tents||[]).filter(t=>!t.hidden).map(t=>({
+          id:t.id,name:t.name,width:t.width,length:t.length,rotation:t.rotation,
+          lat:t.lat,lng:t.lng,siteFlipLength:t.siteFlipLength,siteFlipWidth:t.siteFlipWidth,
+          showInteriorOnMap:true,
+          interior:t.interior?{
+            objects:(t.interior.objects||[]).map(o=>({
+              id:o.id,catalog:o.catalog,type:o.type,label:o.label,
+              x:o.x,y:o.y,w:o.w,h:o.h,rot:o.rot,
+              heightInches:o.heightInches,tableId:o.tableId
+            })),
+            doors:(t.interior.doors||[]).map(d=>({wall:d.wall,at:d.at}))
+          }:null
+        }))};
+      if(!snapshot.tents.length)throw new Error('Add at least one visible tent before sharing.');
+      const row=await tables.createRow({databaseId:DATABASE_ID,tableId:TABLE_ID,
+        rowId:ID.unique(),data:{name:SHARE_PREFIX+safeName(current.name).slice(0,235),
+          ownerId:user.$id,payload:JSON.stringify(snapshot)},
+        permissions:[Permission.read(Role.any()),...rowPermissions(user.$id)]});
+      setShares(prev=>[row,...prev]);
+      const url=publicUrl(row.$id);
+      await navigator.clipboard.writeText(url);
+      setShareMessage('Read-only link copied. This is a snapshot; future edits require a new link.');
+    }catch(e){setShareMessage('Could not create or copy share link: '+messageFor(e));}
+    finally{setShareBusy(false);}
+  }
+  async function revokeShare(row){
+    if(!window.confirm('Revoke this customer link? Anyone using it will lose access.'))return;
+    setShareBusy(true);
+    try{await tables.deleteRow({databaseId:DATABASE_ID,tableId:TABLE_ID,rowId:row.$id});
+      setShares(prev=>prev.filter(x=>x.$id!==row.$id));setShareMessage('Link revoked.');
+    }catch(e){setShareMessage(messageFor(e));}
+    finally{setShareBusy(false);}
+  }
   const backup=()=>{
     const blob=new Blob([JSON.stringify(latestPayload.current,null,2)],{type:'application/json'});
     const u=URL.createObjectURL(blob),a=document.createElement('a');
@@ -249,6 +297,17 @@ export default function CloudProjects({project,measurement,onLoadProject}){
           <button disabled={busy} onClick={()=>createCloudCopy({...initialProject(),name:'New site plan'})}>New blank cloud project</button>
           <button onClick={backup}>Backup JSON</button>
           <button disabled={busy} onClick={async()=>{try{await refresh(user);}catch(err){setError(messageFor(err));}}}>Refresh cloud list</button>
+        </div>
+        <div className="cloud-share">
+          <strong>Share a read-only customer view</strong>
+          <p className="cloud-note">Create a frozen public link to the satellite layout, furnishings and interactive 3D view. No editing tools or account required. Anyone with the link can view it; revoke the link below at any time.</p>
+          <button type="button" className="primary" disabled={shareBusy||!project.tents?.some(t=>!t.hidden)} onClick={createShare}>{shareBusy?'Working…':'Create and copy customer link'}</button>
+          {shareMessage&&<p className="cloud-note" role="status">{shareMessage}</p>}
+          {shares.map(row=><div className="cloud-row" key={row.$id}>
+            <a href={publicUrl(row.$id)} target="_blank" rel="noreferrer">{row.name.slice(SHARE_PREFIX.length)}</a>
+            <button type="button" onClick={()=>navigator.clipboard.writeText(publicUrl(row.$id)).then(()=>setShareMessage('Link copied.')).catch(()=>setShareMessage(publicUrl(row.$id)))}>Copy</button>
+            <button type="button" disabled={shareBusy} onClick={()=>revokeShare(row)}>Revoke</button>
+          </div>)}
         </div>
         <p className="cloud-note">Database connected to IDs <code>{DATABASE_ID}</code> / <code>{TABLE_ID}</code>. Your account was created automatically when you registered here.</p>
         <div className="cloud-list">
